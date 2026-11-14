@@ -1,0 +1,934 @@
+package org.tastytrash.spatialGUI.render;
+
+import net.minecraft.world.phys.Vec3;
+import org.tastytrash.spatialGUI.config.ConfigManager;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
+import org.joml.Matrix4f;
+import org.tastytrash.spatialGUI.editor.EditorGizmo;
+import org.tastytrash.spatialGUI.editor.EditorMode;
+import org.tastytrash.spatialGUI.util.RenderUtil.QuadBasis;
+import org.tastytrash.spatialGUI.util.RenderUtil.CylinderBasis;
+//? if >1.21.1 {
+//? if <26.4 {
+import net.minecraft.client.renderer.RenderPipelines;
+//?}
+import net.minecraft.client.renderer.rendertype.RenderType;
+//?}
+//? if >26.2 {
+/*//? if <26.4 {
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
+//?} else {
+/^import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.renderer.pipeline.RenderPipelines;
+import net.minecraft.client.renderer.pipeline.variant.GuiRenderPipelineVariant;
+^///?}
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.textures.AddressMode;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import net.minecraft.client.renderer.StagedVertexBuffer;
+*///?} else if 26.2 {
+/*import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.PrimitiveTopology;
+import com.mojang.blaze3d.textures.AddressMode;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.renderer.StagedVertexBuffer;
+*///?} else if >1.21.1 {
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.textures.AddressMode;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.VertexFormat;
+//?} else {
+/*import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+//? if 1.21.1 {
+/^import com.mojang.blaze3d.vertex.MeshData;
+^///?}
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexSorting;
+import net.minecraft.client.renderer.GameRenderer;
+import org.lwjgl.opengl.GL11;
+*///?}
+import org.tastytrash.spatialGUI.client.SpatialGUIClient;
+import org.tastytrash.spatialGUI.util.AnimationUtil;
+import org.tastytrash.spatialGUI.util.CameraUtil;
+import org.tastytrash.spatialGUI.util.RenderUtil;
+
+/** Draws the open screen as a flat or curved quad in the world, with open and close animations. */
+public class WorldScreenRenderer {
+    private static final PoseStack WORLD_POSE_STACK = new PoseStack();
+    //? if >1.21.1 {
+    //? if 1.21.11 {
+    /*private static final RenderPipeline SCREEN_PIPELINE = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET).withLocation("pipeline/spatial_gui_screen").withDepthWrite(false).build();
+    private static final RenderPipeline OVERLAY_PIPELINE = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET).withLocation("pipeline/spatial_gui_overlay").withDepthWrite(false).build();
+    *///?} else if 26.1.2 {
+    private static final RenderPipeline SCREEN_PIPELINE = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET).withLocation("pipeline/spatial_gui_screen").withDepthStencilState(java.util.Optional.empty()).build();
+    private static final RenderPipeline OVERLAY_PIPELINE = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET).withLocation("pipeline/spatial_gui_overlay").withDepthStencilState(java.util.Optional.empty()).build();
+    //?} else if < 26.4 {
+    /*private static final RenderPipeline SCREEN_PIPELINE = RenderPipelines.GUI_TEXTURED;
+    private static final RenderPipeline OVERLAY_PIPELINE = RenderPipelines.GUI;
+    *///?} else {
+    /*private static final RenderPipeline SCREEN_PIPELINE = RenderPipelines.gui(new RenderPipelines.GuiParameters(GuiRenderPipelineVariant.TEXTURED));
+    private static final RenderPipeline OVERLAY_PIPELINE = RenderPipelines.gui(new RenderPipelines.GuiParameters(GuiRenderPipelineVariant.DEFAULT));
+    *///?}
+    private static final org.joml.Vector3f ZERO_VECTOR = new org.joml.Vector3f();
+    private static final Matrix4f IDENTITY_MATRIX = new Matrix4f();
+    private static final org.joml.Vector4f COLOR_MODULATOR = new org.joml.Vector4f();
+    //?}
+    //? if >1.21.1 && <26.2 {
+    private static final ByteBufferBuilder SCREEN_BYTE_BUFFER = new ByteBufferBuilder(RenderType.SMALL_BUFFER_SIZE);
+    //?}
+    //? if >=26.2 {
+    /*private static final StagedVertexBuffer SCREEN_BUFFER = new StagedVertexBuffer(
+            () -> "Spatial GUI Screen Buffer",
+            RenderType.SMALL_BUFFER_SIZE
+    );
+    *///?}
+
+    private final ScreenTexture screenTexture;
+    private QuadBasis quadBasis;
+    private CylinderBasis cylinderBasis;
+    private long basisFrame = -1;
+    private int meshQuadCount = 1;
+    /** Quads the curved screen is split into. */
+    private static final int CURVED_SEGMENTS = 32;
+    private static final int SHADOW_TAPS = 12;
+    private long screenOpenTimeMs = 0;
+    private float passAlpha = 1f;
+    private static boolean isRecipeBookOpen = false;
+    /** -2 while the recipe book is open, then counts up to 0 after it closes.
+     * Prevents a scale flicker.*/
+    private static int recipeBookCloseDelay = 0;
+
+    //? if >1.21.1 {
+    private GpuBufferSlice capturedProjectionBuffer;
+    private com.mojang.blaze3d.ProjectionType capturedProjectionType;
+    //?} else {
+    /*private final Matrix4f capturedProjectionMatrix = new Matrix4f();
+    private VertexSorting capturedVertexSorting;
+    *///?}
+    private final PoseStack capturedPoseStack = new PoseStack();
+    private boolean hasCapturedCamera = false;
+    private boolean hasDrawnThisFrame = false;
+
+    private boolean closing = false;
+    private long closeStartTimeMs = 0;
+    private long closeStartElapsedMs = 0;
+    private long closeDurationMs = 0;
+    private boolean closeFirstPerson = false;
+    private float closeYaw;
+    private float closePitch;
+
+    private float smoothedLight = -1f;
+
+    public WorldScreenRenderer(ScreenTexture screenTexture) {
+        this.screenTexture = screenTexture;
+    }
+
+    /** Calculates the brightness tint from the light at the player's eyes, smoothed over time.
+     * @return a lightness value from 0 to 255, where 255 is untinted */
+    private int computeLightingTint() {
+        var mc = Minecraft.getInstance();
+        if (!ConfigManager.config().enableWorldLightingTint || mc.level == null || mc.player == null) return 255;
+
+        int light = mc.level.getMaxLocalRawBrightness(BlockPos.containing(mc.player.getEyePosition()));
+        float target = 255f - (float) ConfigManager.config().lightingTintStrength * (1f - light / 15f);
+
+        smoothedLight = smoothedLight < 0 ? target : smoothedLight + (target - smoothedLight) * 0.1f;
+        return Math.round(smoothedLight);
+    }
+
+    /** Scale and width-to-height ratio of the screen's texture. */
+    private record ScreenPose(float scale, float aspect) {}
+
+    /** Recomputes where the screen is in the world. */
+    public void updateQuadBasis() {
+        if (Minecraft.getInstance().player == null) return;
+        boolean isFirstPerson = SpatialGUIClient.getEffectiveFirstPersonMode();
+        updateScreenBases(computeScreenPose(null, isFirstPerson), isFirstPerson);
+    }
+
+    /** Builds the screen's world pose and stores it in the shared pose stack, and applies it to the given matrices.
+     * @return the screen's scale and aspect ratio */
+    private ScreenPose computeScreenPose(PoseStack matrices, boolean isFirstPerson) {
+        var renderer = SpatialGUIClient.renderer();
+        float yaw = closing ? closeYaw : renderer.anchoredYaw() + CameraUtil.orbitYaw(isFirstPerson);
+        float pitch = isFirstPerson ? (closing ? closePitch : renderer.anchoredPitch()) : 0;
+        float pitchClamp = (float) ConfigManager.config().firstPersonPitchClamp;
+        //? if >=26.2 {
+        /*pitch = Mth.clamp(pitch, -pitchClamp, pitchClamp);
+         *///?} else {
+        pitch = Mth.clamp(pitch, -pitchClamp, pitchClamp);
+        //?}
+        float yawRadians = (float) Math.toRadians(yaw);
+        float pitchRadians = (float) Math.toRadians(pitch);
+
+        RenderUtil.ScreenTransformConfig config = RenderUtil.getScreenTransformConfig(isFirstPerson);
+
+        double lookX = -Math.sin(yawRadians) * Math.cos(pitchRadians);
+        double lookY = -Math.sin(pitchRadians);
+        double lookZ = Math.cos(yawRadians) * Math.cos(pitchRadians);
+
+        float scale = AnimationUtil.scaleForElapsed(config.scale(), getAnimationElapsedMs(), isRecipeBookOpen, recipeBookCloseDelay);
+
+        Vec3 anchor = SpatialGUIClient.getScreenAnchorDelta();
+
+        if (matrices != null) {
+            matrices.translate(anchor.x, anchor.y, anchor.z);
+            RenderUtil.applyScreenTransform(matrices, isFirstPerson, yawRadians, pitchRadians, config, lookX, lookY, lookZ);
+            matrices.scale(scale, scale, scale);
+        }
+
+        WORLD_POSE_STACK.setIdentity();
+        WORLD_POSE_STACK.translate(anchor.x, anchor.y, anchor.z);
+        RenderUtil.applyScreenTransform(WORLD_POSE_STACK, isFirstPerson, yawRadians, pitchRadians, config, lookX, lookY, lookZ);
+        WORLD_POSE_STACK.scale(scale, scale, scale);
+
+        var target = screenTexture.getTarget();
+        float aspect = target != null && target.height > 0
+                ? (float) target.width / (float) target.height
+                : 1.0f;
+        return new ScreenPose(scale, aspect);
+    }
+
+    /** Stores the flat basis, and the curved one if enabled, from the current pose. */
+    private void updateScreenBases(ScreenPose pose, boolean isFirstPerson) {
+        Matrix4f worldPose = WORLD_POSE_STACK.last().pose();
+        quadBasis = RenderUtil.computeQuadBasis(worldPose, pose.aspect(), pose.scale());
+        if (isCurvedScreenActive(isFirstPerson)) {
+            var config = ConfigManager.config();
+            float arcRadians = (float) Math.toRadians(isFirstPerson ? config.curvedScreenArcDegrees : config.thirdPersonCurvedScreenArcDegrees);
+            cylinderBasis = RenderUtil.computeCylinderBasis(worldPose, pose.aspect(), pose.scale(), arcRadians);
+        } else {
+            cylinderBasis = null;
+        }
+    }
+
+    /** @return the flat screen's position and axes in the world, recomputed if stale. */
+    public QuadBasis getQuadBasis() {
+        refreshBasisIfStale();
+        return quadBasis;
+    }
+
+    /** @return the curved screen's position and axes in the world, recomputed if stale. */
+    public CylinderBasis getCylinderBasis() {
+        refreshBasisIfStale();
+        return cylinderBasis;
+    }
+
+    private void refreshBasisIfStale() {
+        long frame = SpatialGUIRenderer.frameCounter();
+        if (basisFrame != frame) {
+            updateQuadBasis();
+            basisFrame = frame;
+        }
+    }
+
+    private static boolean isCurvedScreenActive(boolean isFirstPerson) {
+        var config = ConfigManager.config();
+        if (isFirstPerson) {
+            return config.curvedScreenEnabled;
+        } else {
+            return config.thirdPersonCurvedScreenEnabled;
+        }
+    }
+
+    private void addScreenQuadMesh(VertexConsumer buffer, Matrix4f pose, float aspect, boolean isFirstPerson) {
+        var config = ConfigManager.config();
+        int lightingTint = computeLightingTint();
+        boolean curved = isCurvedScreenActive(isFirstPerson);
+        float arcRadians = (float) Math.toRadians(isFirstPerson ? config.curvedScreenArcDegrees : config.thirdPersonCurvedScreenArcDegrees);
+        float softness = (float) config.dropShadowSoftness;
+        int taps = !config.dropShadowEnabled || passAlpha != 1f ? 0 : softness > 0 ? SHADOW_TAPS : 1;
+        int tapAlpha = taps <= 1 ? config.dropShadowAlpha : Math.round(255 * (1 - (float) Math.pow(1 - Math.min(config.dropShadowAlpha / 255.0F, 0.92F), 1.0 / taps)));
+
+        for (int i = 0; i < taps; i++) {
+            float angle = i * 2.4F;
+            float radius = softness * (float) Math.sqrt((i + 0.5F) / taps);
+            float offsetX = (float) config.dropShadowHorizontalOffset + radius * (float) Math.cos(angle);
+            float offsetY = (float) config.dropShadowVerticalOffset + radius * (float) Math.sin(angle);
+            float scale = (float) config.dropShadowScaleMultiplier;
+            Matrix4f tapPose = new Matrix4f(pose).translate(offsetX, offsetY, (float) -config.dropShadowDepthOffset).scale(scale, scale, scale);
+            if (curved) {
+                RenderUtil.addCurvedScreenQuad(buffer, tapPose, aspect, arcRadians, CURVED_SEGMENTS, 0, tapAlpha);
+            } else {
+                RenderUtil.addScreenQuad(buffer, tapPose, aspect, 0, tapAlpha);
+            }
+        }
+
+        if (curved) {
+            RenderUtil.addCurvedScreenQuad(buffer, pose, aspect, arcRadians, CURVED_SEGMENTS, lightingTint, config.screenAlpha);
+        } else {
+            RenderUtil.addScreenQuad(buffer, pose, aspect, lightingTint, config.screenAlpha);
+        }
+        meshQuadCount = (taps + 1) * (curved ? CURVED_SEGMENTS : 1);
+    }
+
+    /** Saves the projection and camera pose from the world render. */
+    //? if >1.21.1 {
+    public void captureCameraState(GpuBufferSlice buffer, com.mojang.blaze3d.ProjectionType type, PoseStack poseStack) {
+        this.capturedProjectionBuffer = buffer;
+        this.capturedProjectionType = type;
+        this.capturedPoseStack.setIdentity();
+        if (poseStack != null) {
+            this.capturedPoseStack.last().pose().set(poseStack.last().pose());
+            this.capturedPoseStack.last().normal().set(poseStack.last().normal());
+        }
+        this.hasCapturedCamera = true;
+    }
+
+    public GpuBufferSlice getCapturedProjectionBuffer() {
+        return capturedProjectionBuffer;
+    }
+
+    public PoseStack getCapturedPoseStack() {
+        return capturedPoseStack;
+    }
+
+    public com.mojang.blaze3d.ProjectionType getCapturedProjectionType() {
+        return capturedProjectionType;
+    }
+    //?} else {
+    /*public void captureCameraState(Matrix4f projectionMatrix, VertexSorting vertexSorting, PoseStack poseStack) {
+        if (projectionMatrix != null) {
+            this.capturedProjectionMatrix.set(projectionMatrix);
+        }
+        this.capturedVertexSorting = vertexSorting;
+        this.capturedPoseStack.setIdentity();
+        if (poseStack != null) {
+            this.capturedPoseStack.last().pose().set(poseStack.last().pose());
+            this.capturedPoseStack.last().normal().set(poseStack.last().normal());
+        }
+        this.hasCapturedCamera = true;
+    }
+    *///?}
+
+    //? if <=1.21.1 {
+    /*private net.minecraft.client.player.AbstractClientPlayer deferredPlayer;
+    private double deferredX, deferredY, deferredZ;
+    private float deferredYaw, deferredPartialTick;
+    private int deferredLight;
+    private boolean drawingDeferredPlayer;
+
+    public boolean isDrawingDeferredPlayer() {
+    return drawingDeferredPlayer;
+    }
+
+    public boolean hasDeferredPlayer() {
+        return deferredPlayer != null;
+    }
+
+    public void deferPlayer(net.minecraft.client.player.AbstractClientPlayer player, double x, double y, double z, float yaw, float partialTick, int light) {
+        this.deferredPlayer = player;
+        this.deferredX = x;
+        this.deferredY = y;
+        this.deferredZ = z;
+        this.deferredYaw = yaw;
+        this.deferredPartialTick = partialTick;
+        this.deferredLight = light;
+    }
+
+    public void renderDeferredPlayer() {
+        var player = this.deferredPlayer;
+        this.deferredPlayer = null;
+        Minecraft client = Minecraft.getInstance();
+        if (player == null || !hasCapturedCamera || client.level == null) {
+            return;
+        }
+
+        Matrix4f prevProjection = RenderSystem.getProjectionMatrix();
+        VertexSorting prevSorting = RenderSystem.getVertexSorting();
+        var modelView = RenderSystem.getModelViewStack();
+        boolean prevRenderingLevel = SpatialGUIRenderer.renderingLevel;
+
+        PoseStack poseStack = new PoseStack();
+
+        modelView.pushMatrix();
+        try {
+            //? if >1.20.1 {
+            modelView.identity();
+            modelView.mul(capturedPoseStack.last().pose());
+            //?} else {
+            /^modelView.setIdentity();
+            poseStack.last().pose().set(capturedPoseStack.last().pose());
+            poseStack.last().normal().set(capturedPoseStack.last().normal());
+            ^///?}
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(capturedProjectionMatrix, capturedVertexSorting);
+            SpatialGUIRenderer.renderingLevel = true;
+            drawingDeferredPlayer = true;
+
+            var bufferSource = client.renderBuffers().bufferSource();
+            client.getEntityRenderDispatcher().render(player, deferredX, deferredY, deferredZ, deferredYaw, deferredPartialTick, poseStack, bufferSource, deferredLight);
+            bufferSource.endBatch();
+        } finally {
+            drawingDeferredPlayer = false;
+            SpatialGUIRenderer.renderingLevel = prevRenderingLevel;
+            modelView.popMatrix();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(prevProjection, prevSorting);
+        }
+    }
+    *///?}
+
+    private static long animationTotalMs() {
+        long total = 0;
+        if (ConfigManager.config().enableFadeAnimation) total = Math.max(total, ConfigManager.config().fadeDurationMs);
+        if (ConfigManager.config().enableScaleAnimation) total = Math.max(total, ConfigManager.config().openAnimationDurationMs);
+        return total;
+    }
+
+    public boolean beginClosing() {
+        var player = Minecraft.getInstance().player;
+        if (!hasCapturedCamera || player == null || screenTexture.getTarget() == null) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        boolean firstPerson = SpatialGUIClient.getEffectiveFirstPersonMode();
+        long animationMs = Math.min(animationTotalMs(), Math.max(0L, now - screenOpenTimeMs));
+
+        boolean cameraMoves = !firstPerson || SpatialGUIClient.getWasThirdPersonCamera();
+        long cameraMs = cameraMoves ? Math.round(Math.max(0, ConfigManager.config().transitionDurationMs) * (1.0f - ConfigManager.config().transitionSkipPercentage / 100.0f)) : 0L;
+        long duration = Math.max(animationMs, cameraMs);
+        if (duration <= 0L) {
+            return false;
+        }
+        closing = true;
+        closeStartTimeMs = now;
+        closeStartElapsedMs = animationMs;
+        closeDurationMs = duration;
+        closeFirstPerson = firstPerson;
+        var renderer = SpatialGUIClient.renderer();
+        closeYaw = renderer.anchoredYaw() + CameraUtil.orbitYaw(firstPerson);
+        closePitch = renderer.anchoredPitch();
+        hasDrawnThisFrame = false;
+        return true;
+    }
+
+    public boolean isClosingFirstPerson() {
+        return closeFirstPerson;
+    }
+
+    public long getCloseElapsedMs() {
+        return Math.max(0L, System.currentTimeMillis() - closeStartTimeMs);
+    }
+
+    private boolean isFirstPersonNow() {
+        return closing ? closeFirstPerson : SpatialGUIClient.getEffectiveFirstPersonMode();
+    }
+
+    public boolean isClosing() {
+        return closing;
+    }
+
+    public boolean isOpening() {
+        return !closing && getAnimationElapsedMs() < animationTotalMs();
+    }
+
+    public boolean isCloseFinished() {
+        return System.currentTimeMillis() - closeStartTimeMs >= closeDurationMs;
+    }
+
+    public void endClosing() {
+        closing = false;
+    }
+
+    private boolean shouldRender() {
+        return closing ? getAnimationElapsedMs() > 0L : SpatialGUIClient.renderer().shouldCapture();
+    }
+
+    /** Counts up while opening, down while closing */
+    private long getAnimationElapsedMs() {
+        long now = System.currentTimeMillis();
+        if (!closing) {
+            return now - screenOpenTimeMs;
+        }
+        return Math.max(0L, closeStartElapsedMs - (now - closeStartTimeMs));
+    }
+
+    private float getFadeAlpha() {
+        if (!ConfigManager.config().enableFadeAnimation) {
+            return 1.0F;
+        }
+        return Math.min(1.0F, getAnimationElapsedMs() / (float) Math.max(1, ConfigManager.config().fadeDurationMs));
+    }
+
+    public void resetCameraState() {
+        this.hasCapturedCamera = false;
+        this.hasDrawnThisFrame = false;
+    }
+
+    public void onFrameStart() {
+        this.hasDrawnThisFrame = false;
+    }
+
+    public void setScreenOpenTimeMs(long time) {
+        this.screenOpenTimeMs = time;
+    }
+
+    public void setRecipeBookOpen(boolean open) {
+        if (isRecipeBookOpen && !open) {
+            recipeBookCloseDelay = -2;
+        }
+        isRecipeBookOpen = open;
+    }
+
+    public void resetRecipeBookState() {
+        isRecipeBookOpen = false;
+        recipeBookCloseDelay = 0;
+    }
+
+    private boolean hasTexture() {
+        RenderTarget target = screenTexture.getTarget();
+        if (target == null) {
+            return false;
+        }
+        //? if >1.21.1 {
+        return target.getColorTextureView() != null;
+        //?} else {
+        /*return target.getColorTextureId() > 0;
+         *///?}
+    }
+
+    /** Draws the screen into the world using the given pose, as well as the editor handles when active. */
+    public void renderInWorld(PoseStack matrices) {
+        Minecraft client = Minecraft.getInstance();
+
+        if (!hasTexture() || !shouldRender() || client.player == null) {
+            return;
+        }
+
+        RenderTarget target = screenTexture.getTarget();
+        //? if >1.21.1 {
+        var texture = target.getColorTextureView();
+        //?} else {
+        /*int texture = target.getColorTextureId();
+         *///?}
+
+        //? if >=26.2 {
+        /*VertexFormat format = SCREEN_PIPELINE.getVertexFormatBinding(0);
+        if (format == null) {
+            return;
+        }
+
+        StagedVertexBuffer.Draw draw = SCREEN_BUFFER.appendDraw(format, SCREEN_PIPELINE.getPrimitiveTopology(), null);
+        StagedVertexBuffer.Draw overlayDraw = EditorGizmo.active() && passAlpha == 1f
+                ? SCREEN_BUFFER.appendDraw(OVERLAY_PIPELINE.getVertexFormatBinding(0), OVERLAY_PIPELINE.getPrimitiveTopology(), null)
+                : null;
+        VertexConsumer buffer = SCREEN_BUFFER.getVertexBuilder(draw);
+        *///?} else if >1.21.1 {
+        BufferBuilder buffer = new BufferBuilder(SCREEN_BYTE_BUFFER, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+        //?} else if 1.21.1 {
+        /*BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+         *///?} else {
+        /*BufferBuilder buffer = Tesselator.getInstance().getBuilder();
+        buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+        *///?}
+
+        matrices.pushPose();
+
+        boolean isFirstPerson = isFirstPersonNow();
+        ScreenPose screenPose = computeScreenPose(matrices, isFirstPerson);
+        recipeBookCloseDelay = isRecipeBookOpen ? -2 : Math.min(0, recipeBookCloseDelay + 1);
+
+        Matrix4f pose = matrices.last().pose();
+
+        updateScreenBases(screenPose, isFirstPerson);
+        addScreenQuadMesh(buffer, pose, screenPose.aspect(), isFirstPerson);
+
+        //? if >=26.2 {
+        /*if (overlayDraw != null) {
+            EditorGizmo.addHandles(SCREEN_BUFFER.getVertexBuilder(overlayDraw), pose, screenPose.aspect());
+        }
+        *///?} else {
+        Matrix4f handlePose = EditorGizmo.active() && passAlpha == 1f ? new Matrix4f(pose) : null;
+        //?}
+
+        matrices.popPose();
+
+        //? if >=26.2 {
+        /*SCREEN_BUFFER.upload();
+        StagedVertexBuffer.ExecuteInfo info = SCREEN_BUFFER.getExecuteInfo(draw);
+        if (info != null) {
+            drawScreenMesh(info, texture);
+            if (overlayDraw != null) {
+                StagedVertexBuffer.ExecuteInfo overlayInfo = SCREEN_BUFFER.getExecuteInfo(overlayDraw);
+                if (overlayInfo != null) {
+                    drawOverlay(overlayInfo);
+                }
+            }
+        }
+        SCREEN_BUFFER.endFrame();
+        *///?} else if >1.21.1 {
+        MeshData meshData = buffer.build();
+        if (meshData != null) {
+            try (meshData) {
+                drawScreenMesh(meshData, texture);
+            }
+        }
+        //?} else if 1.21.1 {
+        /*drawScreenMesh(buffer.buildOrThrow(), texture);
+         *///?} else {
+        /*drawScreenMesh(buffer.end(), texture);
+         *///?}
+
+        //? if <26.2 {
+        if (handlePose != null) {
+            drawHandles(handlePose, screenPose.aspect());
+        }
+        //?}
+    }
+
+    /** Draws the screen once per frame after the world has rendered. */
+    public void renderInWorldPost() {
+        Minecraft client = Minecraft.getInstance();
+        if (!hasCapturedCamera || hasDrawnThisFrame || !hasTexture() || client.player == null) {
+            return;
+        }
+
+        hasDrawnThisFrame = true;
+        drawQuadPass();
+    }
+
+    /** Draws a second, translucent copy of the screen over the player. */
+    public void renderScreenOverPlayer() {
+        float alpha = Math.min(ConfigManager.config().screenOverPlayerAlpha / 255.0f, 0.999f);
+        if (alpha <= 0f || !hasCapturedCamera || !hasDrawnThisFrame || !hasTexture() || getFadeAlpha() < 1f) {
+            return;
+        }
+
+        passAlpha = alpha;
+        try {
+            drawQuadPass();
+        } finally {
+            passAlpha = 1f;
+        }
+    }
+
+    private void drawQuadPass() {
+        //? if >1.21.1 {
+        var prevBuffer = RenderSystem.getProjectionMatrixBuffer();
+        var prevType = RenderSystem.getProjectionType();
+        //?} else {
+        /*Matrix4f prevProjection = RenderSystem.getProjectionMatrix();
+        VertexSorting prevSorting = RenderSystem.getVertexSorting();
+        var modelView = RenderSystem.getModelViewStack();
+        *///?}
+
+        try {
+            //? if >1.21.1 {
+            if (capturedProjectionBuffer != null && capturedProjectionType != null) {
+                RenderSystem.setProjectionMatrix(capturedProjectionBuffer, capturedProjectionType);
+            }
+            //?} else {
+            /*RenderSystem.setProjectionMatrix(capturedProjectionMatrix, capturedVertexSorting);
+            modelView.pushMatrix();
+            //? if >1.20.1 {
+            modelView.identity();
+            //?} else {
+            /^modelView.setIdentity();
+            ^///?}
+            RenderSystem.applyModelViewMatrix();
+            *///?}
+            renderInWorld(capturedPoseStack);
+        } finally {
+            //? if >1.21.1 {
+            if (prevBuffer != null) {
+                RenderSystem.setProjectionMatrix(prevBuffer, prevType);
+            }
+            //?} else {
+            /*modelView.popMatrix();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(prevProjection, prevSorting);
+            *///?}
+        }
+    }
+
+    //? if >1.21.1 {
+    private GpuBufferSlice screenOpacity() {
+        return passAlpha == 1f ? writeTransforms(getFadeAlpha()) : writeTransforms(1f, passAlpha);
+    }
+
+    private GpuBufferSlice  writeTransforms(float modulate) {
+        return writeTransforms(modulate, modulate);
+    }
+
+    private GpuBufferSlice writeTransforms(float color, float alpha) {
+        COLOR_MODULATOR.set(color, color, color, alpha);
+        return RenderSystem.getDynamicUniforms().writeTransform(
+                IDENTITY_MATRIX,
+                COLOR_MODULATOR,
+                ZERO_VECTOR,
+                IDENTITY_MATRIX
+        );
+    }
+
+    private static FilterMode filterMode() {
+        return ConfigManager.config().useLinearFiltering ? FilterMode.LINEAR : FilterMode.NEAREST;
+    }
+    //?}
+
+    //? if >=26.2 {
+    /*private void drawScreenMesh(StagedVertexBuffer.ExecuteInfo info, GpuTextureView texture) {
+        var output = Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView();
+        if (output == null) {
+            return;
+        }
+
+        GpuBufferSlice dynamicTransforms = screenOpacity();
+        FilterMode filterMode = filterMode();
+
+        //? if >26.3 {
+        /^var passLayout = com.mojang.renderpearl.api.pipeline.RenderPassLayout.simple("Spatial GUI", output.texture().getFormat(), 1);
+        try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                () -> "Spatial GUI",
+                com.mojang.renderpearl.api.pipeline.RenderPassLayout.simple("Spatial GUI", output.texture().getFormat(), 1),
+                output
+        )) {
+        ^///?} else {
+        try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                () -> "Spatial GUI",
+                output,
+                java.util.Optional.empty(),
+                null,
+                java.util.OptionalDouble.empty()
+        )) {
+        //?}
+            //? if >26.3 {
+            /^renderPass.setPipeline(RenderSystem.getCompiledPipeline(SCREEN_PIPELINE, passLayout.subpass(0)));
+            ^///?} else if >26.2 {
+            /^renderPass.setPipeline(RenderSystem.getCompiledPipeline(SCREEN_PIPELINE));
+             ^///?} else {
+            renderPass.setPipeline(SCREEN_PIPELINE);
+             //?}
+            RenderSystem.bindDefaultUniforms(renderPass);
+            renderPass.setUniform("DynamicTransforms", dynamicTransforms);
+            //? if >26.2 {
+            /^renderPass.setUniform
+            ^///?} else {
+            renderPass.bindTexture
+            //?}
+                    ("Sampler0", texture, RenderSystem.getSamplerCache().getSampler(
+                            AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE,
+                            filterMode, filterMode, ConfigManager.config().useAnisotropicFiltering
+                    ));
+
+            renderPass.setVertexBuffer(0, info.vertexBuffer().slice());
+            renderPass.setIndexBuffer(info.indexBuffer(), info.indexType());
+            renderPass.drawIndexed(info.indexCount(), 1, info.firstIndex(), info.baseVertex(), 0);
+        }
+    }
+
+    private void drawOverlay(StagedVertexBuffer.ExecuteInfo info) {
+        var output = Minecraft.getInstance().gameRenderer.mainRenderTarget().getColorTextureView();
+        if (output == null) {
+            return;
+        }
+
+        GpuBufferSlice dynamicTransforms = writeTransforms(1f);
+        //? if >26.3 {
+        /^var passLayout = com.mojang.renderpearl.api.pipeline.RenderPassLayout.simple("Spatial GUI Overlay", output.texture().getFormat(), 1);
+        try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                () -> "Spatial GUI Overlay",
+                com.mojang.renderpearl.api.pipeline.RenderPassLayout.simple("Spatial GUI Overlay", output.texture().getFormat(), 1),
+                output
+        )) {
+        ^///?} else {
+        try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                () -> "Spatial GUI Overlay",
+                output,
+                java.util.Optional.empty(),
+                null,
+                java.util.OptionalDouble.empty()
+        )) {
+        //?}
+            //? if >26.3 {
+            /^renderPass.setPipeline(RenderSystem.getCompiledPipeline(OVERLAY_PIPELINE, passLayout.subpass(0)));
+            ^///?} else if >26.2 {
+            /^renderPass.setPipeline(RenderSystem.getCompiledPipeline(OVERLAY_PIPELINE));
+             ^///?} else {
+            renderPass.setPipeline(OVERLAY_PIPELINE);
+             //?}
+            RenderSystem.bindDefaultUniforms(renderPass);
+            renderPass.setUniform("DynamicTransforms", dynamicTransforms);
+            renderPass.setVertexBuffer(0, info.vertexBuffer().slice());
+            renderPass.setIndexBuffer(info.indexBuffer(), info.indexType());
+            renderPass.drawIndexed(info.indexCount(), 1, info.firstIndex(), info.baseVertex(), 0);
+        }
+    }
+    *///?} else if >1.21.1 {
+    private void drawScreenMesh(MeshData meshData, GpuTextureView texture) {
+        RenderTarget mainTarget = Minecraft.getInstance().getMainRenderTarget();
+        var output = mainTarget.getColorTextureView();
+        if (output == null) {
+            return;
+        }
+
+        GpuBufferSlice dynamicTransforms = screenOpacity();
+        FilterMode filterMode = filterMode();
+
+        var sequentialBuffer = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+        GpuBuffer indexBuffer = sequentialBuffer.getBuffer(meshQuadCount * 6);
+        VertexFormat.IndexType indexType = sequentialBuffer.type();
+
+        try (GpuBuffer vertexBuffer = RenderSystem.getDevice().createBuffer(
+                () -> "Spatial GUI Quad",
+                GpuBuffer.USAGE_VERTEX,
+                meshData.vertexBuffer()
+        )) {
+            try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                    () -> "Spatial GUI",
+                    output,
+                    java.util.OptionalInt.empty(),
+                    null,
+                    java.util.OptionalDouble.empty()
+            )) {
+                renderPass.setPipeline(WorldScreenRenderer.SCREEN_PIPELINE);
+                RenderSystem.bindDefaultUniforms(renderPass);
+                renderPass.setUniform("DynamicTransforms", dynamicTransforms);
+                renderPass.bindTexture("Sampler0", texture, RenderSystem.getSamplerCache().getSampler(
+                        AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE,
+                        filterMode, filterMode, ConfigManager.config().useAnisotropicFiltering
+                ));
+                renderPass.setVertexBuffer(0, vertexBuffer);
+                renderPass.setIndexBuffer(indexBuffer, indexType);
+                renderPass.drawIndexed(0, 0, meshQuadCount * 6, 1);
+            }
+        }
+    }
+
+    /** Renders the editor mode handles. */
+    private void drawHandles(Matrix4f pose, float aspect) {
+        if (EditorMode.previewing()) return;
+        RenderTarget mainTarget = Minecraft.getInstance().getMainRenderTarget();
+        var output = mainTarget.getColorTextureView();
+        if (output == null) {
+            return;
+        }
+
+        BufferBuilder buffer = new BufferBuilder(SCREEN_BYTE_BUFFER, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        EditorGizmo.addHandles(buffer, pose, aspect);
+        MeshData meshData = buffer.build();
+        if (meshData == null) {
+            return;
+        }
+
+        GpuBufferSlice dynamicTransforms = writeTransforms(1f);
+        var sequentialBuffer = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+        GpuBuffer indexBuffer = sequentialBuffer.getBuffer(EditorGizmo.QUADS * 6);
+        VertexFormat.IndexType indexType = sequentialBuffer.type();
+
+        try (meshData; GpuBuffer vertexBuffer = RenderSystem.getDevice().createBuffer(
+                () -> "Spatial GUI Handles",
+                GpuBuffer.USAGE_VERTEX,
+                meshData.vertexBuffer()
+        )) {
+            try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                    () -> "Spatial GUI Handles",
+                    output,
+                    java.util.OptionalInt.empty(),
+                    null,
+                    java.util.OptionalDouble.empty()
+            )) {
+                renderPass.setPipeline(OVERLAY_PIPELINE);
+                RenderSystem.bindDefaultUniforms(renderPass);
+                renderPass.setUniform("DynamicTransforms", dynamicTransforms);
+                renderPass.setVertexBuffer(0, vertexBuffer);
+                renderPass.setIndexBuffer(indexBuffer, indexType);
+                renderPass.drawIndexed(0, 0, EditorGizmo.QUADS * 6, 1);
+            }
+        }
+    }
+    //?} else {
+    /*//? if 1.21.1 {
+    /^private void drawScreenMesh(MeshData mesh, int textureId) {
+    ^///?} else {
+    private void drawScreenMesh(BufferBuilder.RenderedBuffer mesh, int textureId) {
+    //?}
+        float color = passAlpha == 1f ? getFadeAlpha() : 1f;
+        float alpha = passAlpha == 1f ? color : passAlpha;
+        int filter = ConfigManager.config().useLinearFiltering ? GL11.GL_LINEAR : GL11.GL_NEAREST;
+
+        Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+
+        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
+        RenderSystem.setShaderTexture(0, textureId);
+        screenTexture.getTarget().setFilterMode(filter);
+
+        RenderSystem.setShaderColor(color, color, color, alpha);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableCull();
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        RenderSystem.depthMask(false);
+
+        try {
+            BufferUploader.drawWithShader(mesh);
+        } finally {
+            RenderSystem.depthMask(true);
+            RenderSystem.depthFunc(GL11.GL_LEQUAL);
+            RenderSystem.enableCull();
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+    }
+
+    private void drawHandles(Matrix4f pose, float aspect) {
+        if (EditorMode.previewing()) return;
+        //? if 1.21.1 {
+        /^BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        ^///?} else {
+        BufferBuilder buffer = Tesselator.getInstance().getBuilder();
+        buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        //?}
+        EditorGizmo.addHandles(buffer, pose, aspect);
+
+        Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableCull();
+        RenderSystem.disableDepthTest();
+        RenderSystem.depthMask(false);
+
+        try {
+            //? if 1.21.1 {
+            /^BufferUploader.drawWithShader(buffer.buildOrThrow());
+            ^///?} else {
+            BufferUploader.drawWithShader(buffer.end());
+            //?}
+        } finally {
+            RenderSystem.depthMask(true);
+            RenderSystem.enableDepthTest();
+            RenderSystem.enableCull();
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+    }
+    *///?}
+}

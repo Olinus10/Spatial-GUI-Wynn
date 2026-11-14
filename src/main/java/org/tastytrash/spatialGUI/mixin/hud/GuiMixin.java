@@ -1,0 +1,122 @@
+package org.tastytrash.spatialGUI.mixin.hud;
+
+import com.llamalad7.mixinextras.sugar.Local;
+import net.minecraft.client.gui.Gui;
+import org.spongepowered.asm.mixin.Mixin;
+import org.tastytrash.spatialGUI.config.ConfigManager;
+import org.tastytrash.spatialGUI.util.GuiScaleUtil;
+
+//? if >=1.21.11 {
+import net.minecraft.client.DeltaTracker;
+//?}
+
+//? if >=26.1.2 {
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.tastytrash.spatialGUI.SpatialGUI;
+import org.tastytrash.spatialGUI.client.SpatialGUIClient;
+import org.tastytrash.spatialGUI.editor.EditorScreen;
+import org.tastytrash.spatialGUI.editor.ProfilePicker;
+import org.tastytrash.spatialGUI.render.SpatialGUIRenderer;
+import org.tastytrash.spatialGUI.util.MouseHandlerUtil;
+
+@Mixin(Gui.class)
+public class GuiMixin {
+
+    @Inject(method = "extractRenderState", at = @At("HEAD"))
+    private void spatialGUI$beginExtract(CallbackInfo ci) {
+        GuiScaleUtil.pendingScreen = null;
+        SpatialGUIRenderer.skipWindowOverride = true;
+    }
+
+    @Inject(method = "extractRenderState", at = @At("TAIL"))
+    //? if <26.2 {
+    private void spatialGUI$endExtract(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, CallbackInfo ci) {
+     //?} else {
+    /*private void spatialGUI$endExtract(DeltaTracker deltaTracker, boolean shouldRenderLevel, boolean resourcesLoaded, CallbackInfo ci, @Local(name = "graphics") GuiGraphicsExtractor graphics) {
+    *///?}
+        SpatialGUIRenderer.skipWindowOverride = false;
+        EditorScreen.drawOverlay(graphics);
+        ProfilePicker.drawOverlay(graphics);
+    }
+
+    // swap the graphics so wrappers of this call (e.g. Architectury events REI uses)
+    // draw onto the spatial screen
+    //? if fabric && >=26.2 {
+    /*@ModifyArg(method = "extractRenderState", at = @At(
+            value = "INVOKE",
+            //? if >26.3 {
+            /^target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderStateWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V"
+            ^///?} else {
+            target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderStateWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+            //?}
+    ), index = 0)
+    private GuiGraphicsExtractor spatialGUI$extractScreenIntoIsolatedState(GuiGraphicsExtractor graphics) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null && SpatialGUIClient.isEnabled() && renderer.shouldCapture()) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+            SpatialGUIRenderer.isExtractingScreen = true;
+            SpatialGUIRenderer.cursorTarget = graphics;
+            return renderer.createIsolatedGraphics();
+        }
+        return graphics;
+    }
+
+    @Inject(method = "extractRenderState", at = @At(
+            value = "INVOKE",
+            //? if >26.3 {
+            /^target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderStateWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V",
+            ^///?} else {
+            target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderStateWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+            //?}
+            shift = At.Shift.AFTER
+    ))
+    private void spatialGUI$afterScreenExtraction(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null && ConfigManager.config().enabled && renderer.shouldCapture()) {
+            SpatialGUIRenderer.isExtractingScreen = false;
+            SpatialGUIRenderer.skipWindowOverride = true;
+        }
+        SpatialGUIRenderer.cursorTarget = null;
+    }
+    *///? }
+}
+ //?} else {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+//? if >=1.21.1 {
+import net.minecraft.client.DeltaTracker;
+//?}
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.tastytrash.spatialGUI.editor.EditorScreen;
+import org.tastytrash.spatialGUI.editor.ProfilePicker;
+import org.tastytrash.spatialGUI.render.SpatialGUIRenderer;
+
+@Mixin(Gui.class)
+public class GuiMixin {
+    @Inject(method = "render", at = @At("HEAD"))
+    //? if >=1.21.1 {
+    private void spatialGUI$beginGuiRender(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker, CallbackInfo ci) {
+    //?} else {
+    /^private void spatialGUI$beginGuiRender(GuiGraphicsExtractor guiGraphics, float partialTick, CallbackInfo ci) {
+    ^///?}
+        GuiScaleUtil.pendingScreen = null;
+        SpatialGUIRenderer.skipWindowOverride = true;
+    }
+
+    @Inject(method = "render", at = @At("TAIL"))
+    //? if >=1.21.1 {
+    private void spatialGUI$endGuiRender(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker, CallbackInfo ci) {
+    //?} else {
+    /^private void spatialGUI$endGuiRender(GuiGraphicsExtractor guiGraphics, float partialTick, CallbackInfo ci) {
+    ^///?}
+        SpatialGUIRenderer.skipWindowOverride = false;
+        EditorScreen.drawOverlay(guiGraphics);
+        ProfilePicker.drawOverlay(guiGraphics);
+    }
+}
+*///?}

@@ -1,0 +1,788 @@
+package org.tastytrash.spatialGUI.config;
+
+import dev.isxander.yacl3.api.*;
+import dev.isxander.yacl3.api.controller.DoubleSliderControllerBuilder;
+import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
+import dev.isxander.yacl3.config.v2.api.SerialEntry;
+import dev.isxander.yacl3.config.v2.api.autogen.*;
+import dev.isxander.yacl3.config.v2.api.serializer.GsonConfigSerializerBuilder;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
+import org.tastytrash.spatialGUI.compat.RecipeViewerCompat;
+import org.tastytrash.spatialGUI.screenmanager.ScreenManagerScreen;
+//? if fabric {
+import net.fabricmc.loader.api.FabricLoader;
+//?} else if neoforge {
+/*import net.neoforged.fml.loading.FMLPaths;
+ *///?} else if forge {
+/*import net.minecraftforge.fml.loading.FMLPaths;
+ *///?}
+//? if >=1.21.11 {
+import net.minecraft.resources.Identifier;
+import org.tastytrash.spatialGUI.editor.EditorMode;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;
+import org.tastytrash.spatialGUI.editor.EditorMode;
+        *///?}
+import java.util.ArrayList;
+import java.util.List;
+
+public class SpatialGUIConfig {
+
+    public static final ConfigClassHandler<SpatialGUIConfig> HANDLER =
+            ConfigClassHandler.createBuilder(SpatialGUIConfig.class)
+                    //? if >=1.21.11 {
+                    .id(Identifier.fromNamespaceAndPath("spatial-gui", "config"))
+                    //?} else if >1.20.1 {
+                    /*.id(ResourceLocation.fromNamespaceAndPath("spatial-gui", "config"))
+                     *///?} else {
+                    /*.id(new ResourceLocation("spatial-gui", "config"))
+                     *///?}
+                    .serializer(config -> GsonConfigSerializerBuilder.create(config)
+                            .setPath(configDir().resolve("spatial-gui.json5"))
+                            .setJson5(true)
+                            .build())
+                    .build();
+
+    public static SpatialGUIConfig get() {
+        return HANDLER.instance();
+    }
+
+    // ========
+    // general
+    // ========
+    @SerialEntry
+    @AutoGen(category = "general")
+    @TickBox
+    public boolean enabled = true;
+
+    @SerialEntry
+    @AutoGen(category = "general")
+    @TickBox
+    public boolean editorPausesGame = false;
+
+    // viewMode 
+    @MasterTickBox(value = {"viewMode"}, invert = true)
+    @SerialEntry
+    @AutoGen(category = "general", group = "viewMode")
+    public boolean autoDetectCameraMode = false;
+
+    @SerialEntry
+    @AutoGen(category = "general", group = "viewMode")
+    @EnumCycler
+    public ViewMode viewMode = ViewMode.THIRD_PERSON;
+
+    public enum ViewMode {
+        FIRST_PERSON,
+        THIRD_PERSON
+    }
+
+    @SerialEntry
+    @AutoGen(category = "general", group = "viewMode")
+    @TickBox
+    public boolean useCrosshairForFirstPerson = true;
+
+    // hud 
+    @MasterTickBox(value = {"hideHotbar"}, invert = true)
+    @SerialEntry
+    @AutoGen(category = "general", group = "hud")
+    public boolean hideHud = false;
+
+    @SerialEntry
+    @AutoGen(category = "general", group = "hud")
+    @TickBox
+    public boolean hideHotbar = false;
+
+    // guiScale 
+    @MasterTickBox(value = {"guiScale"})
+    @SerialEntry
+    @AutoGen(category = "general", group = "guiScale")
+    public boolean overrideGuiScale = false;
+
+    @SerialEntry
+    @AutoGen(category = "general", group = "guiScale")
+    @IntSlider(min = 1, max = 6, step = 1)
+    public int guiScale = 4;
+
+    // ========
+    // screens
+    // ========
+    @SerialEntry
+    @AutoGen(category = "screens", group = "screenTypes")
+    @TickBox
+    public boolean inventory = true;
+
+    @SerialEntry
+    @AutoGen(category = "screens", group = "screenTypes")
+    @TickBox
+    public boolean containers = true;
+
+    @SerialEntry
+    @AutoGen(category = "screens", group = "screenTypes")
+    @TickBox
+    public boolean pauseScreen = false;
+
+    @SerialEntry
+    @AutoGen(category = "screens", group = "screenTypes")
+    @TickBox
+    public boolean allScreens = false;
+
+    @SerialEntry
+    @AutoGen(category = "screens", group = "cameraMode")
+    @TickBox
+    public boolean disableFirstPerson = false;
+
+    @SerialEntry
+    @AutoGen(category = "screens", group = "cameraMode")
+    @TickBox
+    public boolean disableThirdPerson = false;
+
+    @SerialEntry
+    @AutoGen(category = "screens", group = "titleFilter")
+    @TickBox
+    public boolean disableDuringHudOverlays = true;
+
+    @SerialEntry
+    @AutoGen(category = "screens", group = "titleFilter")
+    @TickBox
+    public boolean disableWhileSpectatingEntity = true;
+
+    @SerialEntry
+    @AutoGen(category = "screens", group = "titleFilter")
+    @TickBox
+    public boolean disableCustomTextureMenus = false;
+
+    /**
+     * Screens whose title contains any of these strings (case-insensitive) render flat, as vanilla.
+     * Prefix an entry with "regex:" to use a regular expression instead.
+     * Edit in config/spatial-gui.json5 (or wherever the main config file lives).
+     */
+    @SerialEntry
+    public List<String> disabledTitles = new ArrayList<>();
+
+    @SerialEntry
+    public List<String> enabledScreens = defaultEnabledScreens();
+
+    @SerialEntry
+    public List<String> disabledScreens = new ArrayList<>();
+
+    @SerialEntry
+    public List<String> seenScreens = new ArrayList<>();
+
+    // ==========
+    // appearance
+    // ==========
+    // size 
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "size")
+    @IntSlider(min = 25, max = 100, step = 1)
+    public int renderScalePercent = 100;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "size")
+    @DoubleSlider(min = 1.0, max = 3.0, step = 0.05)
+    public double recipeBookShrinkFactor = 1.5;
+
+    // texture
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "texture")
+    @IntSlider(min = 0, max = 255, step = 1)
+    public int screenAlpha = 255;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "texture")
+    @TickBox
+    public boolean renderPlayerInFront = true;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "texture")
+    @IntSlider(min = 0, max = 255, step = 1)
+    public int screenOverPlayerAlpha = 50;
+
+    //? if >=26.1.2 {
+    @MasterTickBox(value = {"worldBlurStrength"})
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "texture")
+    public boolean blurWorldBackground = false;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "texture")
+    @IntSlider(min = 1, max = 10, step = 1)
+    public int worldBlurStrength = 5;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "texture")
+    @EnumCycler
+    public WorldEffect worldEffect = WorldEffect.NONE;
+
+    public enum WorldEffect {
+        NONE(null),
+        DIM("spatial-gui:dim"),
+        DARK("spatial-gui:dark"),
+        PIXELATE("spatial-gui:pixelate"),
+        GRAYSCALE("spatial-gui:grayscale"),
+        DESATURATE("spatial-gui:desaturate");
+
+        public final String chain;
+
+        WorldEffect(String chain) {
+            this.chain = chain;
+        }
+    }
+    //?}
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "texture")
+    @TickBox
+    public boolean useLinearFiltering = true;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "texture")
+    @TickBox
+    public boolean useAnisotropicFiltering = true;
+
+    // firstPersonHands
+    @MasterTickBox(value = {"hideShieldInFirstPerson"}, invert = true)
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "firstPersonHands")
+    public boolean hideHandsInFirstPerson = false;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "firstPersonHands")
+    @TickBox
+    public boolean hideShieldInFirstPerson = true;
+
+    @MasterTickBox(value = {"handPokeAnimation"}, invert = true)
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "firstPersonHands")
+    public boolean armSwing = false;
+
+    @MasterTickBox(value = {"handPokeStrength", "handPokeDurationMs"})
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "firstPersonHands")
+    public boolean handPokeAnimation = false;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "firstPersonHands")
+    @DoubleSlider(min = 0.25, max = 2.5, step = 0.05)
+    public double handPokeStrength = 1.0;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "firstPersonHands")
+    @IntSlider(min = 50, max = 500, step = 10)
+    public int handPokeDurationMs = 150;
+
+    // dropShadow
+    @MasterTickBox(value = {"dropShadowSoftness", "dropShadowAlpha", "dropShadowScaleMultiplier", "dropShadowHorizontalOffset", "dropShadowVerticalOffset", "dropShadowDepthOffset"})
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "dropShadow")
+    public boolean dropShadowEnabled = true;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "dropShadow")
+    @DoubleSlider(min = 0.0, max = 0.05, step = 0.001)
+    public double dropShadowSoftness = 0.0;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "dropShadow")
+    @IntSlider(min = 0, max = 255, step = 1)
+    public int dropShadowAlpha = 120;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "dropShadow")
+    @DoubleSlider(min = 0.8, max = 1.2, step = 0.01)
+    public double dropShadowScaleMultiplier = 1.0;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "dropShadow")
+    @DoubleSlider(min = -0.05, max = 0.05, step = 0.001)
+    public double dropShadowHorizontalOffset = 0.008;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "dropShadow")
+    @DoubleSlider(min = -0.05, max = 0.05, step = 0.001)
+    public double dropShadowVerticalOffset = -0.012;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "dropShadow")
+    @DoubleSlider(min = 0.0, max = 0.05, step = 0.001)
+    public double dropShadowDepthOffset = 0.002;
+
+    // lighting
+    @MasterTickBox(value = {"lightingTintStrength"})
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "lighting")
+    public boolean enableWorldLightingTint = false;
+
+    @SerialEntry
+    @AutoGen(category = "appearance", group = "lighting")
+    @DoubleSlider(min = 0.0, max = 120.0, step = 1.0)
+    public double lightingTintStrength = 50.0;
+
+    // ===========
+    // thirdPerson
+    // ===========
+    // screen
+    @MasterTickBox(value = {"thirdPersonCurvedScreenArcDegrees"})
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    public boolean thirdPersonCurvedScreenEnabled = false;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @IntSlider(min = -180, max = 180, step = 1)
+    public int thirdPersonCurvedScreenArcDegrees = 30;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @DoubleSlider(min = 0.1, max = 10.0, step = 0.05)
+    public double screenDistance = 2.5;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @DoubleSlider(min = -5.0, max = 5.0, step = 0.05)
+    public double screenSideOffset = -0.6;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @DoubleSlider(min = -3.0, max = 3.0, step = 0.05)
+    public double screenHeightOffset = -0.4;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @DoubleSlider(min = -360.0, max = 360.0, step = 1.0)
+    public double screenYawOffset = 160.0;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @DoubleSlider(min = -90.0, max = 90.0, step = 1.0)
+    public double screenPitchOffset = 0.0;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @DoubleSlider(min = 0.5, max = 10.0, step = 0.05)
+    public double screenScale = 3.5;
+
+    @SerialEntry
+    public double recipeViewerScaleMultiplier = 0.65;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @DoubleSlider(min = -2.0, max = 2.0, step = 0.05)
+    public double elytraFlyingSideOffset = -0.5;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "screen")
+    @DoubleSlider(min = -2.0, max = 2.0, step = 0.05)
+    public double elytraFlyingHeightOffset = -0.4;
+
+    // camera 
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    @DoubleSlider(min = 0.5, max = 6.0, step = 0.05)
+    public double cameraDistance = 1.7;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    @DoubleSlider(min = -4.0, max = 4.0, step = 0.05)
+    public double cameraSideOffset = -1.2;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    @DoubleSlider(min = -1.0, max = 4.0, step = 0.05)
+    public double cameraHeightOffset = 1.5;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    @DoubleSlider(min = -180.0, max = 180.0, step = 1.0)
+    public double cameraOrbitYaw = 0.0;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    @DoubleSlider(min = -90.0, max = 90.0, step = 1.0)
+    public double cameraTargetPitch = 10.0;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    @TickBox
+    public boolean lerpCameraPitch = true;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    @TickBox
+    public boolean disableThirdPersonParallax = false;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    @TickBox
+    public boolean fallbackToFirstPersonOnBlockCollision = false;
+
+    @MasterTickBox(value = {"adjustAvatarForFrontView"})
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "camera")
+    public boolean thirdPersonFrontSpecialCase = true;
+
+    // avatar
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "avatar")
+    @TickBox
+    public boolean mirrorThirdPerson = false;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "avatar")
+    @TickBox
+    public boolean mirrorHeadMovement = false;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "avatar")
+    @DoubleSlider(min = -180.0, max = 180.0, step = 1.0)
+    public double avatarBaseYawOffset = 30.0;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "avatar")
+    @DoubleSlider(min = -180.0, max = 180.0, step = 1.0)
+    public double avatarBodyRotationOffset = 20.0;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "avatar")
+    @IntSlider(min = 0, max = 90, step = 1)
+    public int avatarMaxYawOffset = 40;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "avatar")
+    @IntSlider(min = 0, max = 90, step = 1)
+    public int avatarMaxPitchOffset = 25;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "avatar")
+    @TickBox
+    public boolean adjustAvatarForFrontView = true;
+
+    // controls 
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "controls")
+    @DoubleSlider(min = 0.01, max = 1.0, step = 0.01)
+    public double thirdPersonMouseSensitivityYaw = 0.1;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "controls")
+    @DoubleSlider(min = 0.01, max = 1.0, step = 0.01)
+    public double thirdPersonMouseSensitivityPitch = 0.03;
+
+    // transition 
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "transition")
+    @IntSlider(min = 1, max = 5000, step = 10)
+    public int transitionDurationMs = 300;
+
+    @SerialEntry
+    @AutoGen(category = "thirdPerson", group = "transition")
+    @IntSlider(min = 0, max = 100, step = 1)
+    public int transitionSkipPercentage = 0;
+
+    // ===========
+    // firstPerson
+    // ===========
+    // screen 
+
+    @MasterTickBox(value = {"curvedScreenArcDegrees"})
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "screen")
+    public boolean curvedScreenEnabled = false;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "screen")
+    @IntSlider(min = -180, max = 180, step = 1)
+    public int curvedScreenArcDegrees = 30;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "screen")
+    @DoubleSlider(min = 0.1, max = 10.0, step = 0.05)
+    public double firstPersonScreenDistance = 1.5;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "screen")
+    @DoubleSlider(min = -3.0, max = 3.0, step = 0.05)
+    public double firstPersonScreenSideOffset = 0.0;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "screen")
+    @DoubleSlider(min = -3.0, max = 3.0, step = 0.05)
+    public double firstPersonScreenHeightOffset = 0.0;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "screen")
+    @DoubleSlider(min = -360.0, max = 360.0, step = 1.0)
+    public double firstPersonScreenYawOffset = 180.0;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "screen")
+    @DoubleSlider(min = -90.0, max = 90.0, step = 1.0)
+    public double firstPersonScreenPitchOffset = 0.0;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "screen")
+    @DoubleSlider(min = 0.5, max = 10.0, step = 0.05)
+    public double firstPersonScreenScale = 1.8;
+
+    // camera 
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "camera")
+    @TickBox
+    public boolean keepFirstPersonCameraAngle = true;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "camera")
+    @TickBox
+    public boolean disableFirstPersonParallax = false;
+
+    // controls 
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "controls")
+    @DoubleSlider(min = 0.01, max = 1.0, step = 0.01)
+    public double firstPersonMouseSensitivityYaw = 0.4;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "controls")
+    @DoubleSlider(min = 0.01, max = 1.0, step = 0.01)
+    public double firstPersonMouseSensitivityPitch = 0.12;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "controls")
+    @IntSlider(min = 0, max = 90, step = 1)
+    public int firstPersonPitchClamp = 40;
+
+    @SerialEntry
+    @AutoGen(category = "firstPerson", group = "controls")
+    @TickBox
+    public boolean lockFirstPersonYaw = false;
+
+    // ==========
+    // animations
+    // ==========
+    @SerialEntry
+    @AutoGen(category = "animations")
+    @TickBox
+    public boolean enableCloseAnimation = true;
+
+    // fade
+    @MasterTickBox(value = {"fadeDurationMs"})
+    @SerialEntry
+    @AutoGen(category = "animations", group = "fade")
+    public boolean enableFadeAnimation = true;
+
+    @SerialEntry
+    @AutoGen(category = "animations", group = "fade")
+    @IntSlider(min = 0, max = 1000, step = 10)
+    public int fadeDurationMs = 150;
+
+    // scale 
+    @MasterTickBox(value = {"openAnimationDurationMs", "animationStartScalePercent", "animationEasing"})
+    @SerialEntry
+    @AutoGen(category = "animations", group = "scale")
+    public boolean enableScaleAnimation = true;
+
+    @SerialEntry
+    @AutoGen(category = "animations", group = "scale")
+    @IntSlider(min = 50, max = 1000, step = 10)
+    public int openAnimationDurationMs = 300;
+
+    @SerialEntry
+    @AutoGen(category = "animations", group = "scale")
+    @IntSlider(min = 1, max = 100, step = 1)
+    public int animationStartScalePercent = 75;
+
+    @SerialEntry
+    @AutoGen(category = "animations", group = "scale")
+    @EnumCycler
+    public EasingType animationEasing = EasingType.Back;
+
+    public enum EasingType {
+        Cubic,
+        Elastic,
+        Bounce,
+        Back,
+        Exponential,
+        Quadratic,
+        Quartic
+    }
+
+    // ====
+    // fov
+    // ====
+    // override 
+    @MasterTickBox(value = {"targetFov", "fovLerpSpeed"})
+    @SerialEntry
+    @AutoGen(category = "fov", group = "override")
+    public boolean overrideFov = false;
+
+    @SerialEntry
+    @AutoGen(category = "fov", group = "override")
+    @IntSlider(min = 30, max = 110, step = 1)
+    public int targetFov = 70;
+
+    @SerialEntry
+    @AutoGen(category = "fov", group = "override")
+    @IntSlider(min = 0, max = 50, step = 1)
+    public int fovLerpSpeed = 10;
+
+    // autoScale 
+    @MasterTickBox(value = {
+            "autoScaleBaselineFov",
+            "autoScaleScreenPower",
+            "autoScaleSideOffsetMultiplier",
+            "autoScaleDistanceMultiplier",
+            "autoScaleThirdPersonScreenMultiplier"
+    })
+    @SerialEntry
+    @AutoGen(category = "fov", group = "autoScale")
+    public boolean autoScaleByFov = true;
+
+    @SerialEntry
+    @AutoGen(category = "fov", group = "autoScale")
+    @DoubleSlider(min = 30.0, max = 110.0, step = 1.0)
+    public double autoScaleBaselineFov = 70.0;
+
+    @SerialEntry
+    @AutoGen(category = "fov", group = "autoScale")
+    @DoubleSlider(min = 0.1, max = 3.0, step = 0.05)
+    public double autoScaleScreenPower = 1.2;
+
+    @SerialEntry
+    @AutoGen(category = "fov", group = "autoScale")
+    @DoubleSlider(min = -2.0, max = 2.0, step = 0.05)
+    public double autoScaleSideOffsetMultiplier = -0.3;
+
+    @SerialEntry
+    @AutoGen(category = "fov", group = "autoScale")
+    @DoubleSlider(min = 0.1, max = 3.0, step = 0.05)
+    public double autoScaleDistanceMultiplier = 0.8;
+
+    @SerialEntry
+    @AutoGen(category = "fov", group = "autoScale")
+    @DoubleSlider(min = 0.1, max = 2.0, step = 0.01)
+    public double autoScaleThirdPersonScreenMultiplier = 0.82;
+
+    // non-config variables
+    @SerialEntry
+    public boolean editorIntroSeen = false;
+
+    @SerialEntry
+    public boolean profilePickerTipSeen = false;
+
+
+    public int getEffectiveGuiScale() {
+        if (overrideGuiScale) {
+            var window = Minecraft.getInstance().getWindow();
+            int maxFit = Mth.clamp(Math.min(window.getWidth() / 320, window.getHeight() / 240), 1, 6);
+            return Mth.clamp(guiScale, 1, maxFit);
+        }
+        Minecraft mc = Minecraft.getInstance();
+        return mc.getWindow().calculateScale(mc.options.guiScale().get(), mc.isEnforceUnicode());
+    }
+
+
+    private static List<String> defaultEnabledScreens() {
+        String pkg = "net.minecraft.client.gui.screens.inventory.";
+        List<String> list = new ArrayList<>();
+        for (String name : new String[] {
+                "BookViewScreen", "BookEditScreen", "BookSignScreen",
+                "CraftingScreen",
+                "FurnaceScreen", "SmokerScreen", "BlastFurnaceScreen",
+                "AnvilScreen", "EnchantmentScreen", "BeaconScreen", "BrewingStandScreen",
+                "MerchantScreen", "ContainerScreen", "ShulkerBoxScreen", "HopperScreen",
+                "DispenserScreen", "GrindstoneScreen", "SmithingScreen", "CartographyTableScreen",
+                "LoomScreen", "StonecutterScreen", "LecternScreen",
+                "InventoryScreen", "CreativeModeInventoryScreen"
+        }) {
+            list.add(pkg + name);
+        }
+        List<String> modded = List.of(
+                "dev.emi.emi.screen.RecipeScreen",
+                "mezz.jei.gui.recipes.RecipesGui",
+                "me.shedaniel.rei.impl.client.gui.screen.DefaultDisplayViewingScreen",
+                "cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen"
+        );
+        list.addAll(modded);
+        return list;
+    }
+
+    public static java.nio.file.Path configDir() {
+        //? if fabric {
+        return FabricLoader.getInstance().getConfigDir();
+        //?} else {
+        /*return FMLPaths.CONFIGDIR.get();
+         *///?}
+    }
+
+    private static ConfigCategory.Builder copyCategory(ConfigCategory source, Option<?> first) {
+        ConfigCategory.Builder builder = ConfigCategory.createBuilder()
+                .name(source.name())
+                .tooltip(source.tooltip());
+
+        if (first != null) {
+            builder.option(first);
+        }
+        for (OptionGroup group : source.groups()) {
+            if (group.isRoot()) {
+                builder.options(group.options());
+            } else {
+                builder.group(group);
+            }
+        }
+        return builder;
+    }
+
+    public static Screen createScreen(Screen parent) {
+        YetAnotherConfigLib generated = HANDLER.generateGui();
+
+        ButtonOption openEditor = ButtonOption.createBuilder()
+                .name(Component.translatable("yacl3.spatial-gui.config.open_editor"))
+                .description(OptionDescription.of(Component.translatable("yacl3.spatial-gui.config.open_editor.description")))
+                .text(Component.translatable("yacl3.spatial-gui.config.open_editor.button"))
+                .available(Minecraft.getInstance().level != null)
+                .action((screen, option) -> {
+                    screen.finishOrSave();
+                    EditorMode.toggle(Minecraft.getInstance());
+                })
+                .build();
+
+        ButtonOption openScreenManager = ButtonOption.createBuilder()
+                .name(Component.translatable("spatial-gui.screen_manager.title"))
+                .description(OptionDescription.of(Component.translatable("yacl3.spatial-gui.config.screen_manager.description")))
+                .text(Component.translatable("yacl3.spatial-gui.config.screen_manager.button"))
+                .action((screen, option) -> {
+                    screen.finishOrSave();
+                    Minecraft.getInstance().setScreen(new ScreenManagerScreen(parent));
+                })
+                .build();
+
+        List<ConfigCategory> categories = new ArrayList<>(generated.categories());
+
+        ConfigCategory.Builder builder = copyCategory(categories.get(0), null);
+        builder.option(openEditor);
+
+        if (RecipeViewerCompat.isRecipeViewerLoaded()) {
+            builder.option(Option.<Double>createBuilder()
+                    .name(Component.translatable("yacl3.config.spatial-gui:config.recipeViewerScaleMultiplier"))
+                    .description(OptionDescription.of(Component.translatable("yacl3.config.spatial-gui:config.recipeViewerScaleMultiplier.desc")))
+                    .binding(0.65, () -> HANDLER.instance().recipeViewerScaleMultiplier, v -> HANDLER.instance().recipeViewerScaleMultiplier = v)
+                    .controller(o -> DoubleSliderControllerBuilder.create(o).range(0.1, 1.0).step(0.05))
+                    .build());
+        }
+
+        categories.set(0, builder.build());
+        if (categories.size() > 1) {
+            categories.set(1, copyCategory(categories.get(1), openScreenManager).build());
+        }
+
+        return YetAnotherConfigLib.createBuilder()
+                .title(generated.title())
+                .categories(categories)
+                .save(generated.saveFunction())
+                .build()
+                .generateScreen(parent);
+    }
+}

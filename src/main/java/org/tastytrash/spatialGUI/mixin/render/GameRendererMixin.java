@@ -1,0 +1,942 @@
+package org.tastytrash.spatialGUI.mixin.render;
+
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.mojang.blaze3d.platform.Lighting;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.Camera;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.util.Mth;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.tastytrash.spatialGUI.config.ConfigManager;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.tastytrash.spatialGUI.client.SpatialGUIClient;
+import org.tastytrash.spatialGUI.render.SpatialGUIRenderer;
+
+//? if >1.21.1 {
+import net.minecraft.client.renderer.fog.FogRenderer;
+//?}
+
+//? if <26.1.2 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+ *///?}
+
+//? if neoforge {
+/*import net.neoforged.neoforge.client.ClientHooks;
+ *///?} else if forge {
+/*import net.minecraftforge.client.ForgeHooksClient;
+ *///?}
+
+//? if >=26.1.2 {
+import net.minecraft.client.renderer.state.GameRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import org.tastytrash.spatialGUI.render.WorldBlurRenderer;
+
+@Mixin(GameRenderer.class)
+public abstract class GameRendererMixin {
+    @Final @Shadow private GameRenderState gameRenderState;
+    @Final @Shadow private FogRenderer fogRenderer;
+    @Final @Shadow private net.minecraft.client.renderer.Projection hudProjection;
+    @Final @Shadow private net.minecraft.client.renderer.ProjectionMatrixBuffer hud3dProjectionMatrixBuffer;
+    @Final @Shadow private net.minecraft.client.renderer.feature.FeatureRenderDispatcher featureRenderDispatcher;
+    @Shadow private boolean useUiLightmap;
+
+    @Final @Shadow private com.mojang.blaze3d.resource.CrossFrameResourcePool resourcePool;
+
+    @Unique
+    private String spatialGUI$warnedEffect;
+
+    @Unique
+    private void spatialGUI$applyWorldEffect(String id) {
+        Minecraft mc = Minecraft.getInstance();
+        var chain = mc.getShaderManager().getPostChain(net.minecraft.resources.Identifier.parse(id), net.minecraft.client.renderer.LevelTargetBundle.MAIN_TARGETS);
+        if (chain != null) {
+            //? if >=26.2 {
+            /*chain.process(mc.gameRenderer.mainRenderTarget(), this.resourcePool);
+            *///?} else {
+            chain.process(mc.getMainRenderTarget(), this.resourcePool);
+            //?}
+        } else if (!id.equals(spatialGUI$warnedEffect)) {
+            spatialGUI$warnedEffect = id;
+            org.tastytrash.spatialGUI.SpatialGUI.LOGGER.warn("[SpatialGUI/WorldEffect] post chain {} failed to load", id);
+        }
+    }
+
+    //? if >=26.2 {
+    /*@Shadow @Final private net.minecraft.client.renderer.SubmitNodeStorage handAndScreenSubmitNodeStorage;
+     *///?} else {
+    @Shadow @Final private net.minecraft.client.renderer.RenderBuffers renderBuffers;
+    //?}
+    //? if <26.3 {
+    @Shadow protected abstract void renderItemInHand(CameraRenderState cameraState, float deltaPartialTick, org.joml.Matrix4fc modelViewMatrix);
+    //?} else {
+    /*@Shadow @Final private net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer firstPersonHandsAndItemsRenderer;
+    @Shadow protected abstract void bobHurt(CameraRenderState cameraState, com.mojang.blaze3d.vertex.PoseStack poseStack);
+    @Shadow protected abstract void bobView(CameraRenderState cameraState, com.mojang.blaze3d.vertex.PoseStack poseStack);
+    *///?}
+
+    @Unique
+    private boolean spatialGUI$isRedrawingHand = false;
+
+    @Unique
+    private void spatialGUI$resetGuiScale() {
+        boolean prevSkip = SpatialGUIRenderer.skipWindowOverride;
+        SpatialGUIRenderer.skipWindowOverride = true;
+        this.gameRenderState.windowRenderState.guiScale = Minecraft.getInstance().getWindow().getGuiScale();
+        SpatialGUIRenderer.skipWindowOverride = prevSkip;
+    }
+
+    @Unique
+    private boolean spatialGUI$isCapturing(SpatialGUIRenderer renderer) {
+        return renderer != null && renderer.shouldCapture() && SpatialGUIClient.isEnabled();
+    }
+
+    @Unique
+    private void spatialGUI$clearDepth() {
+        var encoder = RenderSystem.getDevice().createCommandEncoder();
+        //? if >=26.2 {
+        /*encoder.clearDepthTexture(((GameRenderer) (Object) this).mainRenderTarget().getDepthTexture(), 0.0);
+         *///?} else {
+        encoder.clearDepthTexture(Minecraft.getInstance().getMainRenderTarget().getDepthTexture(), 1.0);
+        //?}
+    }
+
+    @Unique
+    private void spatialGUI$setupLevelLighting() {
+        //? if >=26.2 {
+        /*((GameRenderer) (Object) this).lighting().setupFor(com.mojang.blaze3d.platform.Lighting.Entry.LEVEL);
+         *///?} else {
+        ((GameRenderer) (Object) this).getLighting().setupFor(com.mojang.blaze3d.platform.Lighting.Entry.LEVEL);
+        //?}
+    }
+
+    @WrapOperation(method = {"render", "renderLevel", "renderItemInHand", "render3dHud"}, at = @At(value = "INVOKE", target = "clearDepthTexture"), require = 0)
+    private void spatialGUI$keepWorldDepth(
+            //? if >=26.3 {
+            /*com.mojang.renderpearl.api.commands.CommandEncoder encoder,
+             *///?} else {
+            com.mojang.blaze3d.systems.CommandEncoder encoder,
+            //?}
+            //? if >=26.3 {
+            /*com.mojang.renderpearl.api.textures.GpuTexture texture,
+             *///?} else {
+            com.mojang.blaze3d.textures.GpuTexture texture,
+            //?}
+            double depth, Operation<Void> original) {
+        if (WorldBlurRenderer.getDeferredPlayerRenderState() == null) {
+            original.call(encoder, texture, depth);
+        }
+    }
+
+    @Unique
+    private void spatialGUI$renderHandsInFront() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.gameMode == null || mc.player == null || mc.level == null) return;
+        var cameraRenderState = this.gameRenderState.levelRenderState.cameraRenderState;
+        if (cameraRenderState == null || !cameraRenderState.initialized) {
+            return;
+        }
+
+        //? if <26.3 {
+        int width = this.gameRenderState.windowRenderState.width;
+        int height = this.gameRenderState.windowRenderState.height;
+        this.hudProjection.setupPerspective(0.05F, 100.0F, cameraRenderState.hudFov, (float) width, (float) height);
+        RenderSystem.setProjectionMatrix(this.hud3dProjectionMatrixBuffer.getBuffer(this.hudProjection), com.mojang.blaze3d.ProjectionType.PERSPECTIVE);
+        spatialGUI$clearDepth();
+        RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.WORLD));
+        spatialGUI$setupLevelLighting();
+        float partialTick = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+
+        boolean spatialGUI$prevUiLightmap = this.useUiLightmap;
+        this.useUiLightmap = false;
+
+        spatialGUI$isRedrawingHand = true;
+        try {
+            this.renderItemInHand(cameraRenderState, partialTick, cameraRenderState.viewRotationMatrix);
+            spatialGUI$renderFeaturesToMainTarget("Item in hand in front of SpatialGUI");
+            SpatialGUIClient.renderer().getWorldScreenRenderer().renderScreenOverPlayer();
+        } finally {
+            this.useUiLightmap = spatialGUI$prevUiLightmap;
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+            spatialGUI$isRedrawingHand = false;
+        }
+        //?} else {
+        /*var playerState = this.gameRenderState.levelRenderState.playerRenderState;
+        if (!playerState.hasPlayer || playerState.firstPersonHandsAndItems == null) {
+            return;
+        }
+
+        boolean spatialGUI$prevUiLightmap = this.useUiLightmap;
+        this.useUiLightmap = false;
+
+        spatialGUI$isRedrawingHand = true;
+        try {
+            int width = this.gameRenderState.windowRenderState.width;
+            int height = this.gameRenderState.windowRenderState.height;
+            this.hudProjection.setupPerspective(0.05F, cameraRenderState.depthFar, cameraRenderState.hudFov, (float) width, (float) height);
+            RenderSystem.setProjectionMatrix(
+                    this.hud3dProjectionMatrixBuffer.getBuffer(this.hudProjection),
+                    com.mojang.blaze3d.ProjectionType.PERSPECTIVE
+            );
+
+            spatialGUI$clearDepth();
+
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.WORLD));
+            spatialGUI$setupLevelLighting();
+
+            var poseStack = new com.mojang.blaze3d.vertex.PoseStack();
+            poseStack.pushPose();
+            poseStack.mulPose(cameraRenderState.viewRotationMatrix.invert(new org.joml.Matrix4f()));
+            var modelViewStack = RenderSystem.getModelViewStack();
+            modelViewStack.pushMatrix().mul(cameraRenderState.viewRotationMatrix);
+            this.bobHurt(cameraRenderState, poseStack);
+            if (this.gameRenderState.optionsRenderState.bobView) {
+                this.bobView(cameraRenderState, poseStack);
+            }
+
+            this.firstPersonHandsAndItemsRenderer.submitHandsWithItems(
+                    cameraRenderState.cameraEntityPartialTicks,
+                    poseStack,
+                    this.handAndScreenSubmitNodeStorage,
+                    playerState,
+                    playerState.firstPersonHandsAndItems
+            );
+
+            spatialGUI$renderFeaturesToMainTarget("Item in hand in front of SpatialGUI");
+            SpatialGUIClient.renderer().getWorldScreenRenderer().renderScreenOverPlayer();
+
+            modelViewStack.popMatrix();
+            poseStack.popPose();
+        } finally {
+            this.useUiLightmap = spatialGUI$prevUiLightmap;
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+            spatialGUI$isRedrawingHand = false;
+        }
+        *///?}
+    }
+
+    @Unique
+    private void spatialGUI$renderPlayerInFront() {
+        var deferredState = WorldBlurRenderer.getDeferredPlayerRenderState();
+        if (deferredState == null) {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        var cameraRenderState = this.gameRenderState.levelRenderState.cameraRenderState;
+        if (cameraRenderState == null || !cameraRenderState.initialized) {
+            return;
+        }
+        var renderer = SpatialGUIClient.renderer();
+
+        var prevProjectionBuffer = RenderSystem.getProjectionMatrixBuffer();
+        var prevProjectionType = RenderSystem.getProjectionType();
+        var modelViewStack = RenderSystem.getModelViewStack();
+        boolean prevRenderingLevel = SpatialGUIRenderer.renderingLevel;
+        boolean prevUiLightmap = this.useUiLightmap;
+        modelViewStack.pushMatrix();
+        try {
+            SpatialGUIRenderer.renderingLevel = true;
+            this.useUiLightmap = false;
+            if (renderer.getCapturedProjectionBuffer() != null && renderer.getCapturedProjectionType() != null) {
+                RenderSystem.setProjectionMatrix(renderer.getCapturedProjectionBuffer(), renderer.getCapturedProjectionType());
+            }
+            modelViewStack.mul(cameraRenderState.viewRotationMatrix);
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.WORLD));
+
+            spatialGUI$setupLevelLighting();
+
+            var camPos = cameraRenderState.pos;
+            WorldBlurRenderer.setDeferredPlayerRenderState(null);
+            deferredState.shadowPieces.clear();
+            if (mc.player != null && mc.player.isInWater()) {
+                spatialGUI$clearDepth();
+            }
+            mc.getEntityRenderDispatcher().submit(deferredState, cameraRenderState,
+                    deferredState.x - camPos.x, deferredState.y - camPos.y, deferredState.z - camPos.z,
+                    new com.mojang.blaze3d.vertex.PoseStack(),
+                    //? if >=26.2 {
+                    /*this.handAndScreenSubmitNodeStorage
+                     *///?} else {
+                    mc.gameRenderer.getSubmitNodeStorage()
+                    //?}
+            );
+
+            spatialGUI$renderFeaturesToMainTarget("Spatial GUI unblurred player");
+            renderer.getWorldScreenRenderer().renderScreenOverPlayer();
+
+            spatialGUI$clearDepth();
+        } finally {
+            SpatialGUIRenderer.renderingLevel = prevRenderingLevel;
+            this.useUiLightmap = prevUiLightmap;
+            modelViewStack.popMatrix();
+            RenderSystem.setProjectionMatrix(prevProjectionBuffer, prevProjectionType);
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+        }
+    }
+
+    @Unique
+    private void spatialGUI$renderFeaturesToMainTarget(String passName) {
+        //? if >=26.3 {
+        /*var frame = this.featureRenderDispatcher.prepareFrame(this.handAndScreenSubmitNodeStorage);
+        try {
+            var mainTarget = ((GameRenderer) (Object) this).mainRenderTarget();
+            //? if >26.3 {
+            /^var colorView = mainTarget.getColorTextureView();
+            var depthView = mainTarget.getDepthTextureView();
+            var passLayout = com.mojang.renderpearl.api.pipeline.RenderPassLayout.simple("Spatial GUI Features", colorView.texture().getFormat(), 1, depthView.texture().getFormat());
+            try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                    () -> passName,
+                    passLayout,
+                    colorView,
+                    depthView
+            )) {
+            ^///?} else {
+            try (var renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                    () -> passName,
+                    mainTarget.getColorTextureView(),
+                    java.util.Optional.empty(),
+                    mainTarget.getDepthTextureView(),
+                    java.util.OptionalDouble.empty()
+            )) {
+            //?}
+                RenderSystem.bindDefaultUniforms(renderPass);
+                net.minecraft.client.renderer.feature.FeatureRenderDispatcher.renderAllFeatures(renderPass, frame);
+            }
+        } finally {
+            if (frame != null) {
+                frame.close();
+            }
+        }
+        *///?} else {
+        //? if >=26.2 {
+        /*this.featureRenderDispatcher.renderAllFeatures(this.handAndScreenSubmitNodeStorage);
+         *///?} else {
+        this.featureRenderDispatcher.renderAllFeatures();
+        this.renderBuffers.bufferSource().endBatch();
+        //?}
+        //?}
+    }
+
+    @Inject(method = "render", at = @At("HEAD"))
+    private void spatialGUI$prepareTargetEarly(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null) {
+            renderer.updateFrame();
+        }
+        if (spatialGUI$isCapturing(renderer)) {
+            renderer.prepareTarget();
+            renderer.onFrameStart();
+        } else if (renderer != null && renderer.isClosing()) {
+            renderer.onFrameStart();
+        } else {
+            spatialGUI$resetGuiScale();
+        }
+    }
+
+    //? if <26.1.2 {
+    /*@Inject(method = "pick", at = @At("TAIL"))
+    private void spatialGUI$clearTargetWhileInGui(CallbackInfo ci) {
+        SpatialGUIClient.clearTarget();
+    }
+    *///?}
+
+    @Inject(method = "processBlurEffect()V", at = @At("HEAD"), cancellable = true)
+    private void spatialGUI$cancelBlurEffect(CallbackInfo ci) {
+        if (WorldBlurRenderer.isApplyingBlur()) {
+            return;
+        }
+        var renderer = SpatialGUIClient.renderer();
+        if (spatialGUI$isCapturing(renderer)) {
+            ci.cancel();
+        }
+    }
+
+    //? if >=26.2 {
+    /*@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/render/GuiRenderer;render()V"))
+     *///?} else {
+    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/render/GuiRenderer;render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V"))
+            //?}
+    private void spatialGUI$beforeGuiRender(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+
+        if (spatialGUI$isCapturing(renderer)) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+            this.gameRenderState.windowRenderState.guiScale = Minecraft.getInstance().getWindow().getGuiScale();
+
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+
+            renderer.clearTarget();
+
+            //? if >=26.2 {
+            /*renderer.getScreenGuiRenderer().render();
+             *///?} else {
+            renderer.getScreenGuiRenderer().render(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+            //?}
+            renderer.getScreenGuiRenderer().endFrame();
+
+            boolean playerInFront = ConfigManager.config().renderPlayerInFront;
+            if (ConfigManager.config().blurWorldBackground) {
+                WorldBlurRenderer.applyBlur(ConfigManager.config().worldBlurStrength);
+            }
+
+            if (ConfigManager.config().worldEffect.chain != null) {
+                spatialGUI$applyWorldEffect(ConfigManager.config().worldEffect.chain);
+            }
+
+            if (!playerInFront) spatialGUI$renderPlayerInFront();
+
+            renderer.renderInWorldPost();
+
+            if (playerInFront) spatialGUI$renderPlayerInFront();
+
+            if (SpatialGUIClient.getEffectiveFirstPersonMode() && !ConfigManager.config().hideHandsInFirstPerson
+                    && Minecraft.getInstance().options.getCameraType() == CameraType.FIRST_PERSON) {
+                spatialGUI$renderHandsInFront();
+            }
+
+            //? if >=26.2 {
+            /*this.gameRenderState.guiRenderState.isHudHidden = false;
+             *///?}
+
+            SpatialGUIRenderer.skipWindowOverride = true;
+            this.gameRenderState.windowRenderState.guiScale = Minecraft.getInstance().getWindow().getGuiScale();
+        } else if (renderer != null && renderer.isClosing() && SpatialGUIClient.isEnabled()) {
+            renderer.renderInWorldPost();
+
+            if (ConfigManager.config().renderPlayerInFront && !renderer.isCloseCameraFinished()) {
+                spatialGUI$renderPlayerInFront();
+            }
+
+            if (renderer.isClosingFirstPerson() && !ConfigManager.config().hideHandsInFirstPerson && Minecraft.getInstance().options.getCameraType() == net.minecraft.client.CameraType.FIRST_PERSON) {
+                spatialGUI$renderHandsInFront();
+            }
+        } else {
+            spatialGUI$renderPlayerInFront();
+        }
+    }
+
+    //? if >=26.2 {
+    /*@Inject(method = "extract", at = @At("HEAD"))
+     *///?} else {
+    @Inject(method = "extractGui", at = @At("HEAD"))
+            //?}
+    private void spatialGUI$refreshMousePosition(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null) {
+            renderer.updateMousePosition();
+        }
+    }
+
+    //? if fabric && <26.2 {
+    @ModifyArg(method = "extractGui", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderStateWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+    ), index = 0)
+    private GuiGraphicsExtractor spatialGUI$extractScreenIntoIsolatedState(GuiGraphicsExtractor graphics) {
+        var renderer = SpatialGUIClient.renderer();
+
+        if (renderer != null && SpatialGUIClient.isEnabled() && renderer.shouldCapture()) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+            SpatialGUIRenderer.isExtractingScreen = true;
+            SpatialGUIRenderer.cursorTarget = graphics;
+            return renderer.createIsolatedGraphics();
+        }
+        return graphics;
+    }
+
+    @Inject(method = "extractGui", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderStateWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+            shift = At.Shift.AFTER
+    ))
+    private void spatialGUI$afterScreenExtraction(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null && ConfigManager.config().enabled && renderer.shouldCapture()) {
+            SpatialGUIRenderer.isExtractingScreen = false;
+            SpatialGUIRenderer.skipWindowOverride = true;
+        }
+        SpatialGUIRenderer.cursorTarget = null;
+    }
+    //?}
+
+    @Inject(method = "render", at = @At("TAIL"))
+    private void spatialGUI$renderIsolatedScreen(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (spatialGUI$isCapturing(renderer)) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+            this.gameRenderState.windowRenderState.guiScale = Minecraft.getInstance().getWindow().getGuiScale();
+        }
+    }
+
+    //? if <26.3 {
+    @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
+            //?} else {
+    /*@Inject(method = "render3dHud", at = @At("HEAD"), cancellable = true)
+     *///?}
+    private void spatialGUI$hideHand(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (this.spatialGUI$isRedrawingHand || renderer == null || !SpatialGUIClient.isEnabled()) {
+            return;
+        }
+        boolean playerInFront = ConfigManager.config().renderPlayerInFront;
+        if (renderer.shouldCapture()) {
+            //? if >=26.2 {
+            /*this.gameRenderState.guiRenderState.isHudHidden = false;
+             *///?}
+            if (SpatialGUIClient.getEffectiveFirstPersonMode() || playerInFront) {
+                ci.cancel();
+            }
+        }
+        if (renderer.isClosing() && (renderer.isClosingFirstPerson() || playerInFront) && !renderer.isCloseCameraFinished()) {
+            ci.cancel();
+        }
+    }
+}
+//?} else if >1.21.1 {
+/*import org.tastytrash.spatialGUI.render.WorldBlurRenderer;import static com.mojang.blaze3d.platform.Lighting.Entry.LEVEL;
+
+@Mixin(GameRenderer.class)
+public abstract class GameRendererMixin {
+    @Final @Shadow private FogRenderer fogRenderer;
+    @Final @Shadow private net.minecraft.client.renderer.RenderBuffers renderBuffers;
+    @Final @Shadow private net.minecraft.client.renderer.feature.FeatureRenderDispatcher featureRenderDispatcher;
+    @Final @Shadow private Camera mainCamera;
+    @Final @Shadow private net.minecraft.client.renderer.CachedPerspectiveProjectionMatrixBuffer hud3dProjectionMatrixBuffer;
+    @Shadow @Final private Lighting lighting;
+
+    @Shadow protected abstract float getFov(net.minecraft.client.Camera camera, float partialTick, boolean useFovSetting);
+    @Shadow protected abstract void renderItemInHand(float partialTick, boolean flag, org.joml.Matrix4f matrix4f);
+
+    @Unique
+    private boolean spatialGUI$isRedrawingHand = false;
+
+    @Unique
+    private boolean spatialGUI$isCapturing(SpatialGUIRenderer renderer) {
+        return renderer != null && renderer.shouldCapture() && SpatialGUIClient.isEnabled();
+    }
+
+    @WrapOperation(method = {"render", "renderLevel", "renderItemInHand"}, at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"), require = 0)
+    private void spatialGUI$keepWorldDepth(com.mojang.blaze3d.systems.CommandEncoder encoder, com.mojang.blaze3d.textures.GpuTexture texture, double depth, Operation<Void> original) {
+        if (WorldBlurRenderer.deferredPlayerState == null) {
+            original.call(encoder, texture, depth);
+        }
+    }
+
+    @Unique
+    private void spatialGUI$renderHandsInFront() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        var renderer = SpatialGUIClient.renderer();
+        if (mc.gameMode == null || mc.player == null || mc.level == null) return;
+        if (this.mainCamera == null || !this.mainCamera.isInitialized()) {
+            return;
+        }
+
+        float partialTick = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        int width = mc.getWindow().getWidth();
+        int height = mc.getWindow().getHeight();
+        float fov = this.getFov(this.mainCamera, partialTick, false);
+
+        RenderSystem.setProjectionMatrix(
+                this.hud3dProjectionMatrixBuffer.getBuffer(width, height, fov),
+                com.mojang.blaze3d.ProjectionType.PERSPECTIVE
+        );
+
+        var encoder = RenderSystem.getDevice().createCommandEncoder();
+        encoder.clearDepthTexture(mc.getMainRenderTarget().getDepthTexture(), 1.0);
+        this.lighting.setupFor(LEVEL);
+        RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.WORLD));
+
+        org.joml.Matrix4f rotationMatrix = new org.joml.Matrix4f().rotation(
+                this.mainCamera.rotation().conjugate(new org.joml.Quaternionf())
+        );
+
+        this.spatialGUI$isRedrawingHand = true;
+        try {
+            this.renderItemInHand(partialTick, false, rotationMatrix);
+            this.featureRenderDispatcher.renderAllFeatures();
+            this.renderBuffers.bufferSource().endBatch();
+            renderer.getWorldScreenRenderer().renderScreenOverPlayer();
+        } finally {
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+            this.spatialGUI$isRedrawingHand = false;
+        }
+    }
+
+    @Unique
+    private void spatialGUI$renderPlayerInFront() {
+        var state = WorldBlurRenderer.deferredPlayerState;
+        var camera = WorldBlurRenderer.deferredPlayerCamera;
+        WorldBlurRenderer.deferredPlayerState = null;
+        WorldBlurRenderer.deferredPlayerCamera = null;
+
+        Minecraft mc = Minecraft.getInstance();
+        var renderer = SpatialGUIClient.renderer();
+        if (state == null || camera == null || renderer == null || mc.level == null) {
+            return;
+        }
+
+        var prevProjectionBuffer = RenderSystem.getProjectionMatrixBuffer();
+        var prevProjectionType = RenderSystem.getProjectionType();
+        boolean prevRenderingLevel = SpatialGUIRenderer.renderingLevel;
+
+        var poseStack = new com.mojang.blaze3d.vertex.PoseStack();
+        var modelViewStack = RenderSystem.getModelViewStack();
+        modelViewStack.pushMatrix();
+
+        try {
+            SpatialGUIRenderer.renderingLevel = true;
+            if (renderer.getCapturedProjectionBuffer() != null && renderer.getCapturedProjectionType() != null) {
+                RenderSystem.setProjectionMatrix(renderer.getCapturedProjectionBuffer(), renderer.getCapturedProjectionType());
+            }
+            modelViewStack.mul(renderer.getWorldScreenRenderer().getCapturedPoseStack().last().pose());
+            this.lighting.setupFor(LEVEL);
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.WORLD));
+
+            WorldBlurRenderer.drawingDeferredPlayer = true;
+            mc.getEntityRenderDispatcher().submit(state, camera,
+                    WorldBlurRenderer.deferredPlayerX, WorldBlurRenderer.deferredPlayerY, WorldBlurRenderer.deferredPlayerZ,
+                    poseStack, mc.gameRenderer.getSubmitNodeStorage());
+            this.featureRenderDispatcher.renderAllFeatures();
+            this.renderBuffers.bufferSource().endBatch();
+            renderer.getWorldScreenRenderer().renderScreenOverPlayer();
+            RenderSystem.getDevice().createCommandEncoder().clearDepthTexture(mc.getMainRenderTarget().getDepthTexture(), 1.0);
+        } finally {
+            SpatialGUIRenderer.renderingLevel = prevRenderingLevel;
+            WorldBlurRenderer.drawingDeferredPlayer = false;
+            modelViewStack.popMatrix();
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+            RenderSystem.setProjectionMatrix(prevProjectionBuffer, prevProjectionType);
+        }
+    }
+
+    @Inject(method = "render", at = @At("HEAD"))
+    private void spatialGUI$prepareTargetEarly(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null) {
+            renderer.updateFrame();
+        }
+        if (spatialGUI$isCapturing(renderer)) {
+            renderer.prepareTarget();
+            renderer.onFrameStart();
+        } else if (renderer != null && renderer.isClosing()) {
+            renderer.onFrameStart();
+        }
+    }
+
+    @Inject(method = "processBlurEffect()V", at = @At("HEAD"), cancellable = true)
+    private void spatialGUI$cancelBlurEffect(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (spatialGUI$isCapturing(renderer)) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/render/GuiRenderer;render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V"))
+    private void spatialGUI$beforeGuiRender(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+
+        if (spatialGUI$isCapturing(renderer)) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+
+            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+            renderer.clearTarget();
+            renderer.getScreenGuiRenderer().render(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+            renderer.getScreenGuiRenderer().incrementFrameNumber();
+
+            renderer.renderInWorldPost();
+
+            if (ConfigManager.config().renderPlayerInFront) {
+                spatialGUI$renderPlayerInFront();
+            }
+
+            if (SpatialGUIClient.getEffectiveFirstPersonMode() && !ConfigManager.config().hideHandsInFirstPerson && Minecraft.getInstance().options.getCameraType() == net.minecraft.client.CameraType.FIRST_PERSON) {
+                spatialGUI$renderHandsInFront();
+            }
+
+            SpatialGUIRenderer.skipWindowOverride = true;
+        } else if (renderer != null && renderer.isClosing() && SpatialGUIClient.isEnabled()) {
+            renderer.renderInWorldPost();
+
+            if (ConfigManager.config().renderPlayerInFront && !renderer.isCloseCameraFinished()) {
+                spatialGUI$renderPlayerInFront();
+            }
+
+            if (renderer.isClosingFirstPerson() && !ConfigManager.config().hideHandsInFirstPerson && Minecraft.getInstance().options.getCameraType() == net.minecraft.client.CameraType.FIRST_PERSON) {
+                spatialGUI$renderHandsInFront();
+            }
+        }
+    }
+    //? if fabric {
+    @ModifyArg(method = "render", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/screens/Screen;renderWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+    ), index = 0)
+    private GuiGraphicsExtractor spatialGUI$extractScreenIntoIsolatedState(GuiGraphicsExtractor graphics) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null && SpatialGUIClient.isEnabled() && renderer.shouldCapture()) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+            SpatialGUIRenderer.isExtractingScreen = true;
+            SpatialGUIRenderer.cursorTarget = graphics;
+            return renderer.createIsolatedGraphics();
+        }
+        return graphics;
+    }
+
+    @Inject(method = "render", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/screens/Screen;renderWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+            shift = At.Shift.AFTER
+    ))
+    private void spatialGUI$afterScreenExtraction(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null && ConfigManager.config().enabled && renderer.shouldCapture()) {
+            SpatialGUIRenderer.isExtractingScreen = false;
+            SpatialGUIRenderer.skipWindowOverride = true;
+        }
+        SpatialGUIRenderer.cursorTarget = null;
+    }
+    //?} else {
+    /^@Redirect(method = "render", at = @At(
+            value = "INVOKE",
+            target = "Lnet/neoforged/neoforge/client/ClientHooks;drawScreen(Lnet/minecraft/client/gui/screens/Screen;Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+    ))
+    private void spatialGUI$redirectScreenExtraction(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        var renderer = SpatialGUIClient.renderer();
+        if (SpatialGUIClient.isEnabled() && screen instanceof AbstractContainerScreen<?> && screen == renderer.getHookedScreen()) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+            renderer.extractIsolatedScreen(screen, partialTick);
+            SpatialGUIRenderer.skipWindowOverride = true;
+        } else {
+            net.neoforged.neoforge.client.ClientHooks.drawScreen(screen, graphics, mouseX, mouseY, partialTick);
+        }
+    }
+    ^///?}
+    @ModifyReturnValue(method = "getFov", at = @At("RETURN"))
+    private float spatialGUI$overrideFov(float original, Camera camera, float partialTick, boolean useFovSetting) {
+        if (!useFovSetting) return original;
+
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer == null) return original;
+
+        float factor = renderer.getFovOverrideFactor();
+        if (factor <= 0f) return original;
+
+        return Mth.lerp(factor, original, (float) ConfigManager.config().targetFov);
+    }
+
+    @Inject(method = "render", at = @At("HEAD"))
+    private void spatialGUI$refreshMousePosition(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null) {
+            renderer.updateMousePosition();
+        }
+    }
+
+    @Inject(method = "render", at = @At("TAIL"))
+    private void spatialGUI$renderIsolatedScreen(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (spatialGUI$isCapturing(renderer)) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+        }
+    }
+
+    @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
+    private void spatialGUI$hideHandWhileClosing(CallbackInfo ci) {
+        if (this.spatialGUI$isRedrawingHand) {
+            return;
+        }
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null && renderer.isClosing() && renderer.isClosingFirstPerson() && SpatialGUIClient.isEnabled()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
+    private void spatialGUI$overrideHideHand(CallbackInfo ci) {
+        if (this.spatialGUI$isRedrawingHand) {
+            return;
+        }
+        var renderer = SpatialGUIClient.renderer();
+        if (spatialGUI$isCapturing(renderer)) {
+            if (SpatialGUIClient.getEffectiveFirstPersonMode()) {
+                ci.cancel();
+            }
+        }
+    }
+}
+*///?} else {
+/*@Mixin(value = GameRenderer.class, priority = 1100)
+public class GameRendererMixin {
+
+    @Unique
+    private boolean spatialGUI$isCapturing(SpatialGUIRenderer renderer) {
+        return renderer != null && renderer.shouldCapture() && SpatialGUIClient.isEnabled();
+    }
+
+    @ModifyReturnValue(method = "getFov", at = @At("RETURN"))
+    private double spatialGUI$overrideFov(double original, Camera camera, float partialTick, boolean useFovSetting) {
+        if (!useFovSetting) return original;
+
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer == null) return original;
+
+        float factor = renderer.getFovOverrideFactor();
+        if (factor <= 0f) return original;
+
+        return Mth.lerp(factor, original, ConfigManager.config().targetFov);
+    }
+
+    @Inject(method = "render", at = @At("HEAD"))
+    private void spatialGUI$prepareTargetEarly(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null) {
+            renderer.updateFrame();
+        }
+        if (spatialGUI$isCapturing(renderer)) {
+            renderer.prepareTarget();
+            renderer.onFrameStart();
+        } else if (renderer != null && renderer.isClosing()) {
+            renderer.onFrameStart();
+        }
+        SpatialGUIRenderer.skipWindowOverride = true;
+    }
+
+    @WrapOperation(method = {"renderLevel", "renderItemInHand"}, at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(IZ)V"), require = 0)
+    private void spatialGUI$keepWorldDepth(int mask, boolean onOsx, Operation<Void> original) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer == null || !renderer.getWorldScreenRenderer().hasDeferredPlayer()) {
+            original.call(mask, onOsx);
+        }
+    }
+
+    //? if 1.21.1 {
+    /^@Inject(method = "processBlurEffect(F)V", at = @At("HEAD"), cancellable = true)
+    private void spatialGUI$cancelBlurEffect(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (spatialGUI$isCapturing(renderer)) {
+            ci.cancel();
+        }
+    }
+    ^///?}
+
+    //? if 1.21.1 {
+    /^@Inject(method = "render", at = @At(value = "INVOKE",
+    target = "Lnet/minecraft/client/gui/Gui;render(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V"))
+    ^///?} else {
+    @Inject(method = "render", at = @At(value = "INVOKE",
+    target = "Lnet/minecraft/client/gui/Gui;render(Lnet/minecraft/client/gui/GuiGraphicsExtractor;F)V"))
+    //?}
+    private void spatialGUI$drawBeforeHud(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer != null && SpatialGUIClient.isEnabled() && (renderer.shouldCapture() || renderer.isClosing())) {
+            renderer.renderInWorldPost();
+            renderer.getWorldScreenRenderer().renderDeferredPlayer();
+            renderer.getWorldScreenRenderer().renderScreenOverPlayer();
+        }
+    }
+
+    @Redirect(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/PostChain;process(F)V"))
+    private void spatialGUI$suppressPostEffect(net.minecraft.client.renderer.PostChain postChain, float partialTick) {
+        var renderer = SpatialGUIClient.renderer();
+        if (spatialGUI$isCapturing(renderer)) {
+            return;
+        }
+        postChain.process(partialTick);
+    }
+
+    //? if fabric {
+    @WrapOperation(method = "render", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/screens/Screen;renderWithTooltip(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+    ))
+    private void spatialGUI$wrapScreenRender(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, Operation<Void> operation) {
+        var renderer = SpatialGUIClient.renderer();
+        if (SpatialGUIClient.isEnabled() && SpatialGUIClient.shouldHookScreen(screen) && screen == renderer.getHookedScreen()) {
+            SpatialGUIRenderer.skipWindowOverride = false;
+            renderer.extractIsolatedScreen(screen, partialTick, operation);
+            SpatialGUIRenderer.skipWindowOverride = true;
+            renderer.renderInWorldPost();
+        } else {
+            operation.call(screen, graphics, mouseX, mouseY, partialTick);
+        }
+    }
+    //?} else {
+    /^@Redirect(method = "render", at = @At(
+            value = "INVOKE",
+            //? if neoforge {
+            /^¹target = "Lnet/neoforged/neoforge/client/ClientHooks;drawScreen(Lnet/minecraft/client/gui/screens/Screen;Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"
+            ¹^///?} else if forge {
+            /^¹target = "Lnet/minecraftforge/client/ForgeHooksClient;drawScreen(Lnet/minecraft/client/gui/screens/Screen;Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+            remap = false
+            ¹^///?}
+    ))
+    private void spatialGUI$redirectScreenExtraction(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        var renderer = SpatialGUIClient.renderer();
+        if (SpatialGUIClient.isEnabled() && SpatialGUIClient.shouldHookScreen(screen) && screen == renderer.getHookedScreen()) {
+            Operation<Void> operation = args -> {
+                spatialGUI$drawScreen((Screen) args[0], (GuiGraphicsExtractor) args[1], (int) args[2], (int) args[3], (float) args[4]);
+                return null;
+            };
+            SpatialGUIRenderer.skipWindowOverride = false;
+            renderer.extractIsolatedScreen(screen, partialTick, operation);
+            SpatialGUIRenderer.skipWindowOverride = true;
+            renderer.renderInWorldPost();
+        } else {
+            spatialGUI$drawScreen(screen, graphics, mouseX, mouseY, partialTick);
+        }
+    }
+
+    @Unique
+    private static void spatialGUI$drawScreen(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        //? if neoforge {
+        /^¹ClientHooks.drawScreen(screen, graphics, mouseX, mouseY, partialTick);
+         ¹^///?} else if forge {
+        /^¹ForgeHooksClient.drawScreen(screen, graphics, mouseX, mouseY, partialTick);
+        ¹^///?}
+    }
+    ^///?}
+
+    @Inject(method = "render", at = @At("TAIL"))
+    private void spatialGUI$endRender(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (spatialGUI$isCapturing(renderer)) {
+            SpatialGUIRenderer.skipWindowOverride = true;
+        }
+    }
+
+    @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
+    private void spatialGUI$overrideHideHand(CallbackInfo ci) {
+        var renderer = SpatialGUIClient.renderer();
+        if (renderer == null || !SpatialGUIClient.isEnabled()) return;
+
+        boolean closing = renderer.isClosing();
+        if (!renderer.shouldCapture() && !closing) return;
+
+        renderer.renderInWorldPost();
+        renderer.getWorldScreenRenderer().renderDeferredPlayer();
+        renderer.getWorldScreenRenderer().renderScreenOverPlayer();
+
+        boolean firstPerson = closing ? renderer.isClosingFirstPerson() : SpatialGUIClient.getEffectiveFirstPersonMode();
+        if (!firstPerson) return;
+        if (ConfigManager.config().hideHandsInFirstPerson) {
+            ci.cancel();
+        } else {
+            RenderSystem.clear(256, Minecraft.ON_OSX);
+        }
+    }
+}
+*///?}
